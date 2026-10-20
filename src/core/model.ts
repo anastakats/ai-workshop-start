@@ -24,6 +24,8 @@ export type Skill = {
   copies: string[];
   /** The SKILL.md itself, as it is. */
   content: string;
+  /** When its directory last changed, ISO 8601 in UTC: its last commit; empty if unknown. */
+  updated: string;
 };
 
 /**
@@ -39,4 +41,10 @@ export function skillLink(repository: Repository, skill: Skill): string {
 export function sortSkills(skills: Skill[]): Skill[] {
   const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   return [...skills].sort((a, b) => compare(a.name, b.name) || compare(a.path, b.path));
+}
+
+/** When the most recently updated of the skills was: ISO 8601, or empty if none is known. */
+export function lastUpdated(skills: Skill[]): string {
+  // In UTC, every date is written the same way: the latest is the largest.
+  return skills.reduce((last, skill) => (skill.updated > last ? skill.updated : last), '');
 }

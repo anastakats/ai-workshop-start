@@ -1,5 +1,5 @@
 // Runs the commands the way the CLI does, with GitHub answering from EXAMPLE below.
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { run } from '../src/commands.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
 import { scanOrganization, type OrganizationOptions } from '../src/core/organization.ts';
@@ -10,6 +10,22 @@ export const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
 
 /** The commit GitHub answers for JetBrains/example. */
 export const EXAMPLE_COMMIT = '5ab6270ab772d113e8ad52ebfcaa0109c522ae00';
+
+/** When JetBrains/example's skill was last committed, as GitHub answers it: not in UTC. */
+export const EXAMPLE_UPDATED = '2026-10-12T09:30:00+02:00';
+
+/**
+ * When the skills of ./fixture were last updated, by directory: fixed, unlike the commits of this
+ * checkout, so the e2e screenshots stay the same. What git answers is tested on a repository of its own.
+ */
+export const FIXTURE_UPDATED: Record<string, string> = {
+  '.agents/skills/plain-notes': '2026-09-01T08:00:00Z',
+  '.agents/skills/release-checklist': '2026-09-15T12:00:00Z',
+  '.claude/skills/commits': '2026-10-14T16:45:00Z',
+  '.claude/skills/no-name': '2026-08-20T10:00:00Z',
+  '.github/skills/code-style': '2026-10-02T09:15:00Z',
+  '.github/skills/no-description': '2026-07-30T14:30:00Z',
+};
 
 /**
  * What GitHub answers for a small repository, JetBrains/example: one skill, its copy, and
@@ -33,6 +49,10 @@ const EXAMPLE: Recording = {
         { path: 'agent/skills/legacy/SKILL.md' },
       ],
     },
+  },
+  [`https://api.github.com/repos/JetBrains/example/commits?sha=${EXAMPLE_COMMIT}&path=.claude/skills/commits&per_page=1`]: {
+    status: 200,
+    body: [{ sha: EXAMPLE_COMMIT, commit: { committer: { date: EXAMPLE_UPDATED } } }],
   },
   [`https://raw.githubusercontent.com/JetBrains/example/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`]: {
     status: 200,
@@ -96,8 +116,15 @@ const ORGANIZATION: Recording = {
 
 const github = replay({ ...EXAMPLE, ...ORGANIZATION });
 
-/** What the user typed, opened as the CLI does, with GitHub answering from EXAMPLE through code search. */
-export const open = (input: string) => openInput(input, { fetch: github, token: 'test' });
+/**
+ * What the user typed, opened as the CLI does, with GitHub answering from EXAMPLE through code
+ * search; ./fixture with its dates from FIXTURE_UPDATED.
+ */
+export async function open(input: string) {
+  const source = await openInput(input, { fetch: github, token: 'test' });
+  if (source.repository.url !== pathToFileURL(FIXTURE).href) return source;
+  return { ...source, updated: async (directory: string) => FIXTURE_UPDATED[directory] ?? { reason: `not in FIXTURE_UPDATED: ${directory}` } };
+}
 
 /** A GitHub organization, scanned as the web view does, with GitHub answering from ORGANIZATION. */
 export const organization = (input: string, options: Pick<OrganizationOptions, 'progress' | 'signal'> = {}) =>

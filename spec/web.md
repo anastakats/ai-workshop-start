@@ -2,18 +2,18 @@
 The target interface: scan a repository, then the skills on the left and the selected `SKILL.md` on the right.
 ![Skill Atlas in the browser: JetBrains/kotlin, 6 skills](web.png)
 ## Screen
-- **Header**: `Skill Atlas`, a field `owner/repo or a GitHub link` (or a local directory), **Scan**; after a scan, `owner/repo` and `N skills`
+- **Header**: `Skill Atlas`, a field `owner/repo or a GitHub link` (or a local directory), **Scan**; after a scan, `owner/repo` and `N skills`, then `last updated <day>`, the latest of the skills' ([Last updated](analysis.md#last-updated)); none known, not shown
 - **Left**: every skill, sorted by **name**; under the name, the description on *one line*, cut with `…`
 - **Filter**: a field `Filter the skills` over them, after a scan; see [Filter the skills](#filter-the-skills)
-- **Right**: the selected skill's `SKILL.md`, *as it is*, with its link and `also in`; before a selection, `Select a skill to read its SKILL.md.`
+- **Right**: the selected skill's `SKILL.md`, *as it is*, with its link, `also in` and `updated <day>`; before a selection, `Select a skill to read its SKILL.md.`
 - While it scans, the button is `Scanning…`, disabled
 - Errors: the CLI's message, in the page, and no skills; warnings under the header
 ## Server
 - Local only: listens on `127.0.0.1`; `GITHUB_TOKEN` stays on the server
-- `GET /` the page, `GET /filter.js` its filter; `GET /api/scan?repo=<input>` → `{ repository, skills, warnings }`, each skill with its `link` and `content`
+- `GET /` the page, `GET /filter.js` its filter; `GET /api/scan?repo=<input>` → `{ repository, skills, warnings }`, each skill with its `link`, `content` and `updated`
 - A clear message → `400 { error }`; *nothing is stored*
 ## Tests
-The base scenarios end to end, in Chromium: `npm run e2e` (e2e/), with GitHub answered from a recording
+The base scenarios end to end, in Chromium: `npm run e2e` (e2e/), with GitHub answered from a recording; `./fixture`'s dates fixed, not this checkout's commits
 ## Filter the skills
 ![Filter the skills: "test", 5 of 41](web-filter.png)
 - A field over the skills: `N of M` match, by name or description, case-insensitive; empty, every skill and no count

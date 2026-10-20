@@ -1,9 +1,10 @@
+import { execFile } from 'node:child_process';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { AtlasError } from './core/errors.ts';
 import { openGitHub, parseGitHubUrl, type GitHubOptions } from './core/github.ts';
-import type { Source } from './core/scan.ts';
+import type { Missing, Source } from './core/scan.ts';
 
 /** Never part of a repository's own files. */
 const SKIPPED = new Set(['.git', 'node_modules']);
@@ -35,7 +36,23 @@ export async function openDirectory(input: string): Promise<Source> {
           reason: error.code === 'ENOENT' ? 'deleted since the directory was listed' : `found in the directory, but cannot be read: ${error.message}`,
         }),
       ),
+    updated: (directory) => lastChange(root, directory),
   };
+}
+
+/**
+ * The date of the last commit that changed the directory; in a directory outside git, or not
+ * committed yet, when its SKILL.md was last modified.
+ */
+async function lastChange(root: string, directory: string): Promise<string | Missing> {
+  const committed = await new Promise<string>((resolve) =>
+    execFile('git', ['-C', root, 'log', '-1', '--format=%cI', '--', directory], (error, stdout) => resolve(error ? '' : stdout.trim())),
+  );
+  if (committed) return committed;
+  return stat(join(root, directory, 'SKILL.md')).then(
+    (file) => file.mtime.toISOString(),
+    (error: NodeJS.ErrnoException) => ({ reason: `cannot read ${directory}: ${error.message}` }),
+  );
 }
 
 /** Every regular file under the directory, as a path relative to the root. */

@@ -1,15 +1,16 @@
 # Skill Atlas
 
 Every agent skill in a repository: `./skill-atlas scan` finds each `SKILL.md` and prints its name,
-description and link.
+description, link and when it was last updated.
 
 ```console
 $ npm ci
 $ ./skill-atlas scan https://github.com/JetBrains/kotlin
-JetBrains/kotlin · 6 skills
+JetBrains/kotlin · 6 skills · last updated 2026-10-12
 …
 build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle plugins are compiled against in the Kotlin compiler repository.
   https://github.com/JetBrains/kotlin/blob/5ab6270ab772d113e8ad52ebfcaa0109c522ae00/.claude/skills/build-tools-bump-gradle-api/SKILL.md
+  updated 2026-10-12
 …
 ```
 
