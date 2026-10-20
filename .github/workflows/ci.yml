@@ -34,6 +34,13 @@ jobs:
         with:
           name: playwright-traces
           path: test-results/
+      # The demos (demo/README.md): a video of each, for the pull request, in the run's artifacts.
+      - run: npm run demo
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: demo-videos
+          path: demo-videos/
       # The real CLI on the fixture repository, as a user would run it: it must exit 0.
       - name: Smoke test
         run: |
