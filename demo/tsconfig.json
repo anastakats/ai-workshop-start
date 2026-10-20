@@ -1,0 +1,7 @@
+// The demos: the root config, plus the dom lib for the code they run in the page. Its own
+// program, so the rest of the code cannot use the browser's globals.
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "lib": ["esnext", "dom"] },
+  "include": ["."]
+}

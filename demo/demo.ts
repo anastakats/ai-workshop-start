@@ -1,6 +1,5 @@
 // What a demo is made of: Playwright's test, with a visible cursor, captions, typing at a human
 // pace and a terminal for the CLI; each test's video saved as demo-videos/<its title>.webm.
-/// <reference lib="dom" />
 import { execFile } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

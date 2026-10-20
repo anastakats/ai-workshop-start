@@ -1,6 +1,5 @@
 // A demo of the web view (spec/web.md): scan a repository, read a skill, filter the skills.
 // The template for a new feature's demo: copy it, show the feature, keep the expects.
-import { FIXTURE } from '../tests/helpers.ts';
 import { caption, expect, pause, test, type } from './demo.ts';
 
 test('web view', async ({ page }) => {
@@ -8,7 +7,8 @@ test('web view', async ({ page }) => {
   await caption(page, 'Skill Atlas: every SKILL.md in a repository');
 
   await caption(page, 'Scan a repository: owner/repo, a GitHub link or a directory', 600);
-  await type(page.getByRole('textbox', { name: 'Repository' }), FIXTURE);
+  // Relative to the checkout, where the server runs: the same on every machine, unlike FIXTURE.
+  await type(page.getByRole('textbox', { name: 'Repository' }), './fixture');
   await page.getByRole('button', { name: 'Scan' }).click();
   const skills = page.getByRole('navigation', { name: 'Skills' }).getByRole('button');
   await expect(skills).toHaveCount(6);
