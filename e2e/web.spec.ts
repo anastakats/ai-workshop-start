@@ -39,6 +39,8 @@ test('a local directory, scanned with Enter: the repository, its skills sorted b
   await step('scanned with Enter', async () => {
     await field(page).press('Enter');
     await expect(page.locator('#repository')).toHaveText('fixture6 skills');
+    // The most recently updated skill's day: commits, in tests/helpers.ts.
+    await expect(page.locator('#updated')).toHaveText('last updated 2026-10-14');
     await expect(page.locator('nav .name')).toHaveText(FIXTURE_SKILLS);
     await expect(skills(page).filter({ hasText: 'commits' }).locator('.description')).toHaveText(
       'Write commit messages the way this repository does. Use for every commit.',
@@ -67,6 +69,7 @@ test('selecting a skill shows its SKILL.md as it is, its link and its copies; an
     const link = `${pathToFileURL(FIXTURE).href}/.claude/skills/commits/SKILL.md`;
     await expect(skill.getByRole('link')).toHaveAttribute('href', link);
     await expect(skill.locator('.copies')).toHaveText('also in .github/skills/commits/SKILL.md');
+    await expect(skill.locator('.updated')).toHaveText('updated 2026-10-14');
     // Front matter and Markdown, as text: not rendered.
     await expect(skill.locator('pre')).toHaveText(readFileSync(join(FIXTURE, '.claude/skills/commits/SKILL.md'), 'utf8'));
   });
@@ -78,6 +81,7 @@ test('selecting a skill shows its SKILL.md as it is, its link and its copies; an
     await expect(commits).toHaveAttribute('aria-current', 'false');
     await expect(skill.getByRole('heading')).toHaveText('code-style');
     await expect(skill.locator('.copies')).toHaveCount(0);
+    await expect(skill.locator('.updated')).toHaveText('updated 2026-10-02');
   });
 });
 
@@ -86,6 +90,7 @@ test('owner/repo on GitHub: the skill, linked at the scanned commit, with its SK
     await field(page).fill('JetBrains/example');
     await scanButton(page).click();
     await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
+    await expect(page.locator('#updated')).toHaveText('last updated 2026-10-12');
     await expect(page.locator('nav .name')).toHaveText(['commits']);
   });
 
@@ -96,6 +101,8 @@ test('owner/repo on GitHub: the skill, linked at the scanned commit, with its SK
       `https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`,
     );
     await expect(page.locator('article pre')).toContainText('# Commits');
+    // On GitHub, when the skill was last committed, in UTC.
+    await expect(page.locator('article .updated')).toHaveText('updated 2026-10-12');
   });
 });
 
@@ -114,6 +121,7 @@ test("an unreachable repository: the CLI's message, no skills; the next scan wor
     await expect(page.locator('.error')).toHaveText(`Not a GitHub URL or a readable directory: ${missing}`);
     await expect(skills(page)).toHaveCount(0);
     await expect(page.locator('#repository')).toBeHidden();
+    await expect(page.locator('#updated')).toBeHidden();
     await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
   });
 
@@ -269,6 +277,7 @@ test('while an organization scans: Scanning…, its name and a progress bar, the
     await expect(page.getByRole('button', { name: 'Scanning…' })).toBeDisabled();
     await expect(organization(page).locator('#org-id')).toHaveText('github.com/JetBrains');
     await expect(organization(page).getByRole('progressbar')).toBeVisible();
+    await expect(page.locator('#updated')).toBeHidden();
   });
 
   await step('the organization scanned', async () => {
@@ -283,6 +292,7 @@ test('while an organization scans: Scanning…, its name and a progress bar, the
     await expect(field(page)).toHaveValue('JetBrains/example');
     await expect(organization(page)).toBeHidden();
     await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
+    await expect(page.locator('#updated')).toHaveText('last updated 2026-10-12');
     await expect(page.locator('nav .name')).toHaveText(['commits']);
     await expect(page.getByRole('searchbox', { name: 'Filter the skills' })).toBeVisible();
   });

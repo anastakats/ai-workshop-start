@@ -16,7 +16,7 @@
   body { display: flex; flex-direction: column; background: var(--page); color: var(--text); font: 16px/1.4 var(--sans); }
   header { display: flex; align-items: center; gap: 16px; padding: 16px 32px; background: var(--panel); border-bottom: 1px solid var(--line); }
   h1 { margin: 0 24px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
-  form { display: flex; gap: 12px; flex: 1; max-width: 760px; }
+  form { display: flex; gap: 12px; flex: 1; min-width: 0; max-width: 760px; }
   input { flex: 1; min-width: 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; font: 18px var(--mono); color: var(--text); }
   input::placeholder { color: var(--muted); }
   input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
@@ -25,6 +25,7 @@
   #repository { display: flex; align-items: center; gap: 12px; margin-left: 24px; font: 18px var(--mono); white-space: nowrap; }
   #repository[hidden] { display: none; }
   #count { padding: 4px 14px; border-radius: 999px; background: var(--chip); font: 16px var(--sans); color: var(--muted); }
+  #updated { color: var(--muted); font-size: 14px; white-space: nowrap; }
   #messages:empty { display: none; }
   #messages { padding: 8px 32px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 14px; }
   .error { color: var(--error); }
@@ -47,7 +48,7 @@
   .placeholder { margin-top: 72px; color: var(--muted); font-size: 18px; }
   article h2 { margin: 0 0 8px; font: 600 22px var(--mono); }
   article a { color: var(--accent); word-break: break-all; font-size: 14px; }
-  .copies { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  .copies, .updated { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
   pre { margin: 24px 0 0; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font: 14px/1.55 var(--mono); white-space: pre-wrap; word-wrap: break-word; }
   main[hidden], #organization[hidden] { display: none; }
   .sprite { position: absolute; width: 0; height: 0; }
@@ -84,6 +85,7 @@
     <button id="submit" type="submit">Scan</button>
   </form>
   <div id="repository" hidden><span id="id"></span><span id="count"></span></div>
+  <span id="updated" hidden></span>
 </header>
 <div id="messages" role="status"></div>
 <main id="main">
@@ -174,6 +176,7 @@
 
   function showOrganization(name) {
     $('repository').hidden = true;
+    $('updated').hidden = true;
     scanned = [];
     selected = null;
     $('filter').hidden = true;
@@ -223,6 +226,7 @@
   function showError(message) {
     showSkills();
     $('repository').hidden = true;
+    $('updated').hidden = true;
     scanned = [];
     selected = null;
     $('filter').hidden = true;
@@ -242,6 +246,10 @@
     $('id').textContent = repository.id;
     $('count').textContent = `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}`;
     $('repository').hidden = false;
+    // The most recently updated skill's day; the dates are in UTC, so the latest is the largest.
+    const last = skills.reduce((last, skill) => (skill.updated > last ? skill.updated : last), '');
+    $('updated').textContent = `last updated ${day(last)}`;
+    $('updated').hidden = !last;
     $('messages').replaceChildren(...warnings.map((warning) => element('div', { className: 'warning', textContent: `warning: ${warning}` })));
     placeholder();
     scanned = skills;
@@ -267,6 +275,9 @@
     }));
   }
 
+  // `2026-10-12T09:30:00.000Z` → `2026-10-12`: the day, in UTC, as the CLI prints it.
+  const day = (date) => date.slice(0, 10);
+
   function select(item, skill) {
     selected = skill;
     for (const other of $('skills').children) other.setAttribute('aria-current', String(other === item));
@@ -274,6 +285,7 @@
       element('h2', { textContent: skill.name }),
       element('a', { href: skill.link, textContent: skill.link, target: '_blank', rel: 'noopener' }),
       ...(skill.copies.length ? [element('p', { className: 'copies', textContent: `also in ${skill.copies.join(', ')}` })] : []),
+      ...(skill.updated ? [element('p', { className: 'updated', textContent: `updated ${day(skill.updated)}` })] : []),
       element('pre', { textContent: skill.content }));
   }
 </script>

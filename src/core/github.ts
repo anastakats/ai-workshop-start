@@ -1,6 +1,6 @@
 import { AtlasError, EmptyRepository, GitHubUnavailable } from './errors.ts';
 import { SKILL_ROOTS } from './find.ts';
-import type { Source } from './scan.ts';
+import type { Missing, Source } from './scan.ts';
 
 /** The part of `fetch` the core uses, so tests and the browser can pass their own. */
 export type Fetch = (url: string, init?: { headers?: Record<string, string> }) => Promise<Response>;
@@ -47,7 +47,22 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
     paths,
     warnings,
     read: async (path) => (await github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`)) ?? { reason: missing },
+    updated: (directory) => lastCommit(github, id, sha, directory),
   };
+}
+
+type Commit = { commit: { committer: { date: string } } };
+
+/** The date of the last commit up to `sha` that changed the directory: one request for each skill. */
+async function lastCommit(github: Client, id: string, sha: string, directory: string): Promise<string | Missing> {
+  try {
+    const [last] = await github.json<Commit[]>(`${API}/repos/${id}/commits?sha=${sha}&path=${encodePath(directory)}&per_page=1`);
+    return last?.commit.committer.date ?? { reason: `GitHub lists no commit that changed ${directory}` };
+  } catch (error) {
+    // The skill is there all the same: without its date, the scan goes on.
+    if (error instanceof AtlasError) return { reason: error.message };
+    throw error;
+  }
 }
 
 /** Code search looks at the whole default branch, 100 results a page. */

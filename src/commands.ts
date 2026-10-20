@@ -1,7 +1,7 @@
 // The skill-atlas commands. The same code serves the Node CLI and the browser
 // terminal: everything that differs between them comes in through the context.
 import { AtlasError } from './core/errors.ts';
-import { skillLink, type Repository, type Skill } from './core/model.ts';
+import { lastUpdated, skillLink, type Repository, type Skill } from './core/model.ts';
 import { scan, type Source } from './core/scan.ts';
 
 export type Context = {
@@ -52,14 +52,24 @@ async function serveCommand(args: string[], context: Context) {
   context.print(`Skill Atlas at ${await context.serve(port)}`);
 }
 
-/** `<owner>/<repo> · N skills`, then each skill's name, first sentence and link. */
+/**
+ * `<owner>/<repo> · N skills · last updated <date>`, then each skill's name, first sentence, link
+ * and the day it was updated.
+ */
 function printRepository(repository: Repository, skills: Skill[], { print }: Context) {
-  print(`${repository.id} · ${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}`);
+  const last = lastUpdated(skills);
+  print(`${repository.id} · ${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}${last ? ` · last updated ${day(last)}` : ''}`);
   for (const skill of skills) {
     print(skill.description ? `${skill.name} — ${firstSentence(skill.description)}` : skill.name);
     print(`  ${skillLink(repository, skill)}`);
     if (skill.copies.length > 0) print(`  also in ${skill.copies.join(', ')}`);
+    if (skill.updated) print(`  updated ${day(skill.updated)}`);
   }
+}
+
+/** `2026-10-12T09:30:00.000Z` → `2026-10-12`: the day, in UTC. */
+function day(date: string): string {
+  return date.slice(0, 10);
 }
 
 function firstSentence(text: string): string {
