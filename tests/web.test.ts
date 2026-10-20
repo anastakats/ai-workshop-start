@@ -37,6 +37,17 @@ test('the page: the title, the field, Scan, and the placeholder for SKILL.md', a
   assert.doesNotMatch(page.text, /innerHTML/);
 });
 
+test('the filter: a field over the skills, and its script, served as JavaScript', async () => {
+  const page = await get('/');
+  assert.match(page.text, /<input id="query"[^>]* placeholder="Filter the skills"/);
+  assert.match(page.text, /import \{ filterSkills \} from '\/filter\.js'/);
+  const script = await get('/filter.js');
+  assert.equal(script.status, 200);
+  assert.equal(script.type, 'text/javascript; charset=utf-8');
+  assert.equal(script.text, readFileSync(new URL('../src/web/filter.js', import.meta.url), 'utf8'));
+  assert.doesNotMatch(script.text, /innerHTML/);
+});
+
 test('./fixture: the repository, every skill sorted by name with its link and SKILL.md, and the warnings', async () => {
   const { status, body } = await scanned(FIXTURE);
   assert.equal(status, 200);

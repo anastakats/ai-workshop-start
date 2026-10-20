@@ -7,13 +7,14 @@ import { skillLink } from './core/model.ts';
 import { scan, type Source } from './core/scan.ts';
 
 const PAGE = new URL('./web/index.html', import.meta.url);
+const FILTER = new URL('./web/filter.js', import.meta.url);
 
 export type WebContext = {
   /** Opens what the user asked to scan. */
   open(input: string): Promise<Source>;
 };
 
-/** `GET /`, the page; `GET /api/scan?repo=<input>`, `{ repository, skills, warnings }` or `400 { error }`. */
+/** `GET /`, the page, and `GET /filter.js`, its filter; `GET /api/scan?repo=<input>`, `{ repository, skills, warnings }` or `400 { error }`. */
 export function createWebServer(context: WebContext): Server {
   return createServer(async (request, response) => {
     const send = (status: number, type: string, body: string) => {
@@ -24,6 +25,7 @@ export function createWebServer(context: WebContext): Server {
     const url = new URL(request.url ?? '/', 'http://localhost');
     if (request.method !== 'GET') return json(405, { error: `Not allowed: ${request.method}` });
     if (url.pathname === '/') return send(200, 'text/html', await readFile(PAGE, 'utf8'));
+    if (url.pathname === '/filter.js') return send(200, 'text/javascript', await readFile(FILTER, 'utf8'));
     if (url.pathname !== '/api/scan') return json(404, { error: `Not found: ${url.pathname}` });
     const input = url.searchParams.get('repo')?.trim();
     if (!input) return json(400, { error: 'Enter owner/repo, a GitHub link or a directory' });

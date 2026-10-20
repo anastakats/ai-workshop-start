@@ -123,3 +123,53 @@ test('a long description stays on one line, cut with …', async ({ page }) => {
   const { scrollWidth, clientWidth } = await description.evaluate((node) => ({ scrollWidth: node.scrollWidth, clientWidth: node.clientWidth }));
   expect(scrollWidth).toBeGreaterThan(clientWidth);
 });
+
+const filter = (page: Page) => page.getByRole('searchbox', { name: 'Filter the skills' });
+
+test('the filter: N of M, by name or description, case-insensitive, the matches highlighted', async ({ page }) => {
+  await expect(filter(page)).toBeHidden();
+  await field(page).fill(FIXTURE);
+  await scanButton(page).click();
+  await expect(filter(page)).toBeVisible();
+  await expect(filter(page)).toHaveAttribute('placeholder', 'Filter the skills');
+  await expect(page.locator('#matches')).toBeHidden();
+
+  await filter(page).fill('COMMIT');
+  await expect(page.locator('#matches')).toHaveText('2 of 6');
+  await expect(page.locator('nav .name')).toHaveText(['code-style', 'commits']);
+  await expect(page.locator('nav .name mark')).toHaveText(['commit']);
+  const codeStyle = skills(page).filter({ hasText: 'code-style' }).locator('.description');
+  await expect(codeStyle).toHaveText('…style. Use before committing Kotlin or Java changes.');
+  await expect(codeStyle.locator('mark')).toHaveText(['commit']);
+  await expect(skills(page).filter({ hasText: 'commits' }).locator('.description mark')).toHaveText(['commit', 'commit']);
+
+  await filter(page).fill('no such skill');
+  await expect(page.locator('#matches')).toHaveText('0 of 6');
+  await expect(skills(page)).toHaveCount(0);
+
+  await filter(page).fill('');
+  await expect(page.locator('#matches')).toBeHidden();
+  await expect(page.locator('nav .name')).toHaveText(FIXTURE_SKILLS);
+  await expect(page.locator('nav mark')).toHaveCount(0);
+});
+
+test('the filter keeps the selection; a new scan clears it, an error hides it', async ({ page }) => {
+  await field(page).fill(FIXTURE);
+  await scanButton(page).click();
+  await skills(page).filter({ hasText: 'commits' }).click();
+
+  await filter(page).fill('commit');
+  await expect(skills(page).filter({ hasText: 'commits' })).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
+  await skills(page).filter({ hasText: 'code-style' }).click();
+  await expect(page.locator('article').getByRole('heading')).toHaveText('code-style');
+
+  await scanButton(page).click();
+  await expect(filter(page)).toHaveValue('');
+  await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+
+  await field(page).fill(join(FIXTURE, 'no-such-directory'));
+  await scanButton(page).click();
+  await expect(page.locator('.error')).toBeVisible();
+  await expect(filter(page)).toBeHidden();
+});

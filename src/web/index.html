@@ -30,7 +30,14 @@
   .error { color: var(--error); }
   .warning { color: var(--warning); }
   main { display: flex; flex: 1; min-height: 0; }
-  nav { width: 36%; min-width: 280px; overflow-y: auto; border-right: 1px solid var(--line); padding: 16px 0; }
+  nav { width: 36%; min-width: 280px; overflow-y: auto; border-right: 1px solid var(--line); }
+  #filter { position: sticky; top: 0; display: flex; align-items: center; padding: 16px 24px 8px; background: var(--page); }
+  #filter[hidden] { display: none; }
+  #query { padding: 10px 104px 10px 16px; font: 16px var(--sans); }
+  #skills { padding-bottom: 16px; }
+  #matches { position: absolute; right: 32px; padding: 2px 12px; border-radius: 999px; background: var(--accent); color: #fff; font: 500 14px var(--sans); white-space: nowrap; pointer-events: none; }
+  #matches:empty { display: none; }
+  mark { padding: 0 1px; border-radius: 3px; background: #f8e3a3; color: var(--text); }
   nav button { display: block; width: 100%; padding: 12px 40px; border-radius: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
   nav button:hover { background: #f0f0ed; }
   nav button[aria-current="true"] { background: #e9eafb; }
@@ -55,11 +62,18 @@
 </header>
 <div id="messages" role="status"></div>
 <main>
-  <nav id="skills" aria-label="Skills"></nav>
+  <nav aria-label="Skills">
+    <div id="filter" hidden>
+      <input id="query" type="search" placeholder="Filter the skills" aria-label="Filter the skills" autocomplete="off" spellcheck="false">
+      <span id="matches"></span>
+    </div>
+    <div id="skills"></div>
+  </nav>
   <article id="skill"><p class="placeholder">Select a skill to read its SKILL.md.</p></article>
 </main>
-<script>
-  'use strict';
+<script type="module">
+  import { filterSkills } from '/filter.js';
+
   // Every text goes in through textContent: a SKILL.md is never HTML here.
   const $ = (id) => document.getElementById(id);
   const element = (tag, props = {}, ...children) => {
@@ -67,6 +81,9 @@
     node.append(...children);
     return node;
   };
+  // The scanned skills, and the one on the right, if any.
+  let scanned = [];
+  let selected = null;
   const placeholder = () => $('skill').replaceChildren(element('p', { className: 'placeholder', textContent: 'Select a skill to read its SKILL.md.' }));
 
   $('scan').addEventListener('submit', async (event) => {
@@ -89,8 +106,14 @@
     }
   });
 
+  $('query').addEventListener('input', () => list());
+
   function showError(message) {
     $('repository').hidden = true;
+    scanned = [];
+    selected = null;
+    $('filter').hidden = true;
+    $('query').value = '';
     $('skills').replaceChildren();
     placeholder();
     $('messages').replaceChildren(element('div', { className: 'error', textContent: message }));
@@ -102,16 +125,31 @@
     $('repository').hidden = false;
     $('messages').replaceChildren(...warnings.map((warning) => element('div', { className: 'warning', textContent: `warning: ${warning}` })));
     placeholder();
-    $('skills').replaceChildren(...skills.map((skill) => {
+    scanned = skills;
+    selected = null;
+    $('query').value = '';
+    $('filter').hidden = false;
+    list();
+  }
+
+  // The skills that match the filter, the matches highlighted; `N of M` while it filters.
+  function list() {
+    const query = $('query').value;
+    const matching = filterSkills(scanned, query);
+    $('matches').textContent = query.trim() ? `${matching.length} of ${scanned.length}` : '';
+    const parts = (all) => all.map(({ text, match }) => (match ? element('mark', { textContent: text }) : text));
+    $('skills').replaceChildren(...matching.map(({ skill, shown }) => {
       const item = element('button', { type: 'button', title: skill.path },
-        element('span', { className: 'name', textContent: skill.name }),
-        element('span', { className: 'description', textContent: skill.description.replace(/\s+/g, ' ').trim() }));
+        element('span', { className: 'name' }, ...parts(shown.name)),
+        element('span', { className: 'description' }, ...parts(shown.description)));
+      item.setAttribute('aria-current', String(skill === selected));
       item.addEventListener('click', () => select(item, skill));
       return item;
     }));
   }
 
   function select(item, skill) {
+    selected = skill;
     for (const other of $('skills').children) other.setAttribute('aria-current', String(other === item));
     $('skill').replaceChildren(
       element('h2', { textContent: skill.name }),
