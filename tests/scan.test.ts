@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
-import { openGitHub, parseGitHubUrl } from '../src/core/github.ts';
+import { openGitHub, parseGitHubUrl, type Fetch } from '../src/core/github.ts';
 import { parseSkill } from '../src/core/parse.ts';
 import { replay } from '../src/core/replay.ts';
 import { scan } from '../src/core/scan.ts';
@@ -193,4 +193,28 @@ test('a listed SKILL.md that cannot be read → a warning that says why, and the
   const local = await scan(directory);
   assert.deepEqual(local.skills.map((s) => s.name), ['kept']);
   assert.deepEqual(local.warnings, ['.agents/skills/moved/SKILL.md: deleted since the directory was listed; skipped']);
+});
+
+test('with GITHUB_TOKEN, a private repository: its SKILL.md is read with the token', async () => {
+  const API = 'https://api.github.com';
+  const file = `https://raw.githubusercontent.com/JetBrains/private/${EXAMPLE_COMMIT}/.agents/skills/secret/SKILL.md`;
+  const recorded = replay({
+    [`${API}/repos/JetBrains/private`]: { status: 200, body: { full_name: 'JetBrains/private', default_branch: 'main' } },
+    [`${API}/repos/JetBrains/private/commits/main`]: { status: 200, body: { sha: EXAMPLE_COMMIT } },
+    [`${API}/search/code?q=filename:SKILL.md+repo:JetBrains/private&per_page=100&page=1`]: {
+      status: 200,
+      body: { total_count: 1, items: [{ path: '.agents/skills/secret/SKILL.md' }] },
+    },
+  });
+  // As raw.githubusercontent.com does for a private repository: 404 without the token.
+  const github: Fetch = async (url, init) =>
+    url !== file
+      ? recorded(url, init)
+      : init?.headers?.Authorization === 'Bearer test'
+        ? new Response('---\nname: secret\ndescription: Private.\n---\n')
+        : new Response('404: Not Found', { status: 404 });
+
+  const result = await scan(await openGitHub('JetBrains/private', { fetch: github, token: 'test' }));
+  assert.deepEqual(result.skills.map((s) => s.name), ['secret']);
+  assert.deepEqual(result.warnings, []);
 });

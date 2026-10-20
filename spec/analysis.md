@@ -9,6 +9,7 @@ Core: fetch → find → parse. CLI: a *thin client*.
 Skill: id = `repo:path`, name, description, commit
 ## Details
 - **GitHub API**, no clone; *under 5 s* for intellij-community, with `GITHUB_TOKEN`
+- With `GITHUB_TOKEN`, private repositories it sees too: `SKILL.md` is read with the token
 - The name: front matter, else the directory
 - The link pins the *scanned commit*
 - Malformed front matter → a *warning*, the scan goes on

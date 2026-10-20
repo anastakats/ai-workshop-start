@@ -137,9 +137,9 @@ export function client({ fetch, token }: GitHubOptions) {
       if (!answers.has(url)) answers.set(url, request(url, notFound));
       return answers.get(url) as Promise<T>;
     },
-    /** A file's bytes at the scanned commit, or undefined if it is not there. */
+    /** A file's bytes at the scanned commit, or undefined if it is not there. With the token: a private repository's are 404 without it. */
     async raw(url: string): Promise<Uint8Array | undefined> {
-      const response = await get(url);
+      const response = await get(url, token ? { headers: { Authorization: headers.Authorization } } : undefined);
       if (response.status === 404) return undefined;
       if (!response.ok) throw new AtlasError(`GitHub answered ${response.status} for ${url}`);
       return new Uint8Array(await response.arrayBuffer());
