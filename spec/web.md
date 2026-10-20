@@ -13,3 +13,13 @@ The target interface: scan a repository, then the skills on the left and the sel
 - A clear message → `400 { error }`; *nothing is stored*
 ## Tests
 The base scenarios end to end, in Chromium: `npm run e2e` (e2e/), with GitHub answered from a recording
+## Next
+Mockups, not built yet.
+### Scan the organization
+![Scan the organization: github.com/JetBrains, 865 repositories, 27 with skills](web-org.png)
+- A field `github.com/<org>`: the number of repositories, a progress bar while it scans
+- Then `N with skills, among them`: a few repositories with their `N skills`, and `+K more`
+### Filter the skills
+![Filter the skills: "test", 5 of 41](web-filter.png)
+- A field over the skills: `N of M` match, by name or description, case-insensitive
+- The match highlighted; for a description, the words around it, cut with `…`
