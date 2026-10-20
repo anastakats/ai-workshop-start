@@ -1,6 +1,5 @@
 // The decisions in spec/analysis.md and spec/cli.md, checked on what the real command prints for
-// ./fixture and for a small GitHub repository answered in tests/helpers.ts. The edge cases of
-// where skills live are yours to add.
+// ./fixture and for a small GitHub repository answered in tests/helpers.ts.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -34,8 +33,10 @@ test('scan prints the repository, then each skill with its first sentence and pi
       'JetBrains/example · 1 skill',
       'commits — Write commit messages the way this repository does.',
       `  https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`,
+      '  also in .github/skills/commits/SKILL.md',
     ].join('\n'),
   );
+  assert.equal(example.stderr, '');
 });
 
 test('./fixture: every skill, sorted by name, linked to its file, with a warning for the malformed one', () => {
@@ -49,11 +50,32 @@ test('./fixture: every skill, sorted by name, linked to its file, with a warning
       `  ${root}/.github/skills/code-style/SKILL.md`,
       'commits — Write commit messages the way this repository does.',
       `  ${root}/.claude/skills/commits/SKILL.md`,
+      '  also in .github/skills/commits/SKILL.md',
       'release-checklist',
       `  ${root}/.agents/skills/release-checklist/SKILL.md`,
     ].join('\n'),
   );
-  assert.match(fixture.stderr, /^warning: \.agents\/skills\/release-checklist\/SKILL\.md: malformed front matter: /);
+  assert.deepEqual(fixture.stderr.split('\n'), [
+    'warning: .agents/skills/release-checklist/SKILL.md: malformed front matter: Nested mappings are not allowed in compact mappings at line 3, column 14; using the directory name',
+  ]);
+});
+
+test('the same name in several skill roots → one skill, linked in the first root, the others as copies', () => {
+  // .claude/skills comes before .github/skills; the copy on GitHub is never read.
+  for (const { stdout } of [fixture, example]) {
+    assert.equal(stdout.match(/^commits — /gm)?.length, 1);
+    assert.match(stdout, /\/\.claude\/skills\/commits\/SKILL\.md\n {2}also in \.github\/skills\/commits\/SKILL\.md/);
+  }
+});
+
+test('only <name>/SKILL.md in a skill root at the repository root is a skill; any other file is ignored silently', () => {
+  // ./fixture: at the root, under docs/, nested, directly in a root, skill.md, a skill root
+  // inside a subdirectory, and agent/skills.
+  for (const { stdout, stderr } of [fixture, example]) {
+    assert.doesNotMatch(stdout, /not-a-skill/);
+    assert.doesNotMatch(stderr, /not-a-skill|examples|docs\/|packages\/|agent\/skills|(?:^|\s)SKILL\.md/);
+  }
+  assert.equal(fixture.stderr.split('\n').length, 1); // the malformed skill's warning, nothing else
 });
 
 test('the CLI prints the result at once and stores nothing', (t) => {
@@ -92,3 +114,4 @@ test('rate limit → a message that asks for GITHUB_TOKEN', async () => {
     message: 'GitHub rate limit reached; set GITHUB_TOKEN',
   });
 });
+
