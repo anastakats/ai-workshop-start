@@ -122,3 +122,12 @@ test('rate limit → a message that asks for GITHUB_TOKEN', async () => {
   });
 });
 
+// Live GitHub, so only with GITHUB_TOKEN: without one, the rate limit allows a scan or two an hour.
+test('intellij-community is scanned through the GitHub API in under 5 s', { skip: !process.env.GITHUB_TOKEN && 'needs GITHUB_TOKEN' }, () => {
+  const started = performance.now();
+  const scanned = spawnSync(process.execPath, [CLI, 'scan', 'https://github.com/JetBrains/intellij-community'], { encoding: 'utf8' });
+  const seconds = (performance.now() - started) / 1000;
+  assert.equal(scanned.status, 0, scanned.stderr);
+  assert.match(scanned.stdout, /^JetBrains\/intellij-community · \d+ skills\n/);
+  assert.ok(seconds < 5, `took ${seconds.toFixed(1)} s`);
+});
