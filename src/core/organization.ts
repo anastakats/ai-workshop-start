@@ -65,7 +65,7 @@ export async function scanOrganization(input: string, options: OrganizationOptio
     while (next < listed.length && !failed && !options.signal?.aborted) {
       const repository = listed[next++];
       try {
-        counted.push({ id: repository.full_name, name: repository.name, url: repository.html_url, skills: await countSkills(github, repository) });
+        counted.push({ id: repository.full_name, name: repository.name, url: repository.html_url, skills: await countSkills(options, repository) });
       } catch (error) {
         if (error instanceof GitHubUnavailable || !(error instanceof AtlasError)) {
           failed = true; // the other workers stop asking
@@ -99,8 +99,12 @@ async function listRepositories(github: Client, owner: { login: string; type: st
   }
 }
 
-/** The skills findSkills finds in the tree at the default branch; an empty repository has none. */
-async function countSkills(github: Client, repository: ListedRepository): Promise<number> {
+/**
+ * The skills findSkills finds in the tree at the default branch; an empty repository has none. A
+ * client of its own: a client keeps every answer, and an organization's trees would all stay in memory.
+ */
+async function countSkills(options: GitHubOptions, repository: ListedRepository): Promise<number> {
+  const github = client(options);
   try {
     // Only the skill roots matter here, so a tree too large to list at once is no warning.
     const paths = await treePaths(github, repository.full_name, encodePath(repository.default_branch), []);
