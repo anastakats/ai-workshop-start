@@ -15,7 +15,8 @@ build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle 
 
 `owner/repo` works too. In the browser, `./skill-atlas serve` opens the [web view](spec/web.md) at
 http://localhost:3000 (`--port N` for another port): the skills on the left, filtered by name or description,
-the selected `SKILL.md` on the right.
+the selected `SKILL.md` on the right. `github.com/<org>` in the same field scans a whole organization: its
+repositories with skills, the most skills first.
 
 Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests; `npm run e2e`, the
 web view in a browser (once: `npx playwright install chromium`; or `CHROMIUM_PATH=<chromium>`).

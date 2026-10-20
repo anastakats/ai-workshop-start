@@ -8,10 +8,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
+import { AtlasError } from '../src/core/errors.ts';
 import { createWebServer, listen } from '../src/web.ts';
-import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE, open } from './helpers.ts';
+import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE, open, organization } from './helpers.ts';
 
-const server = createWebServer({ open });
+const server = createWebServer({ open, organization });
 const base = await listen(server, 0);
 after(() => server.close());
 
@@ -133,4 +134,80 @@ test('serve: a wrong port → the usage, exit code 1', async () => {
   for (const args of [['--port', 'x'], ['--port'], ['3000']]) {
     assert.deepEqual(await atlas(['serve', ...args]), { code: 1, stdout: '', stderr: 'Usage: skill-atlas serve [--port N]' });
   }
+});
+
+/** What `/api/organization` streams: one JSON object a line. */
+async function organizationLines(org: string) {
+  const { status, type, text } = await get(`/api/organization?org=${encodeURIComponent(org)}`);
+  return { status, type, lines: text.split('\n').filter(Boolean).map((line) => JSON.parse(line)) };
+}
+
+test('github.com/<org>: the number of repositories, the progress, then the repositories with skills', async () => {
+  const { status, type, lines } = await organizationLines('github.com/JetBrains');
+  assert.equal(status, 200);
+  assert.equal(type, 'application/x-ndjson; charset=utf-8');
+  const listed = { id: 'JetBrains', url: 'https://github.com/JetBrains', repositories: 7 };
+  assert.deepEqual(lines.slice(0, 8), [{ organization: listed }, ...[1, 2, 3, 4, 5, 6, 7].map((scanned) => ({ scanned }))]);
+  assert.deepEqual(lines.slice(8), [await organization('github.com/JetBrains')]);
+  assert.deepEqual(
+    lines[8].repositories.map((repository: { name: string; skills: number }) => `${repository.name} ${repository.skills}`),
+    ['mps 4', 'kotlin 3', 'ai-tools 2', 'example 1'],
+  );
+  assert.equal(lines[8].warnings.length, 1);
+});
+
+test('an organization: a clear message before the scan → 400 { error }', async () => {
+  const ask = async (org: string) => {
+    const { status, text } = await get(`/api/organization?org=${encodeURIComponent(org)}`);
+    return { status, body: JSON.parse(text) };
+  };
+  assert.deepEqual(await ask('JetBrains/kotlin'), { status: 400, body: { error: 'Not a GitHub organization: JetBrains/kotlin' } });
+  assert.deepEqual(await ask('github.com/not-answered'), {
+    status: 400,
+    body: { error: 'Cannot reach GitHub: not recorded: https://api.github.com/users/not-answered' },
+  });
+  assert.deepEqual(await ask(''), { status: 400, body: { error: 'Enter github.com/<organization>' } });
+});
+
+test('an organization: a failure during the scan → a last line { error }', async () => {
+  const failing = createWebServer({
+    open,
+    async organization(_input, { progress }) {
+      progress?.({ organization: { id: 'Big', url: 'https://github.com/Big', repositories: 2 } });
+      progress?.({ scanned: 1 });
+      throw new AtlasError('GitHub rate limit reached; set GITHUB_TOKEN');
+    },
+  });
+  const url = await listen(failing, 0);
+  after(() => failing.close());
+  const response = await fetch(`${url}/api/organization?org=github.com/Big`);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.text()).split('\n').filter(Boolean).map((line) => JSON.parse(line)), [
+    { organization: { id: 'Big', url: 'https://github.com/Big', repositories: 2 } },
+    { scanned: 1 },
+    { error: 'GitHub rate limit reached; set GITHUB_TOKEN' },
+  ]);
+});
+
+test('an organization: the page goes away → the scan is stopped', async () => {
+  let stopped!: (aborted: boolean) => void;
+  const aborted = new Promise<boolean>((resolve) => (stopped = resolve));
+  const waiting = createWebServer({
+    open,
+    organization: (_input, { progress, signal }) =>
+      new Promise((_resolve, reject) => {
+        progress?.({ organization: { id: 'Big', url: 'https://github.com/Big', repositories: 865 } });
+        signal?.addEventListener('abort', () => {
+          stopped(true);
+          reject(new AtlasError('stopped'));
+        });
+      }),
+  });
+  const url = await listen(waiting, 0);
+  after(() => waiting.close());
+  const page = new AbortController();
+  const response = await fetch(`${url}/api/organization?org=github.com/Big`, { signal: page.signal });
+  await response.body?.getReader().read(); // the first line
+  page.abort();
+  assert.equal(await aborted, true);
 });

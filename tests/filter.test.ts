@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { createWebServer, listen } from '../src/web.ts';
 import { filterSkills, matchSkill } from '../src/web/filter.js';
-import { FIXTURE, open } from './helpers.ts';
+import { FIXTURE, open, organization } from './helpers.ts';
 
-const server = createWebServer({ open });
+const server = createWebServer({ open, organization });
 const base = await listen(server, 0);
 after(() => server.close());
 
