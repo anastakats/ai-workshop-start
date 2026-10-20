@@ -4,7 +4,8 @@ import { defineConfig, devices } from '@playwright/test';
 const port = 3200;
 
 export default defineConfig({
-  testDir: 'demo',
+  // DEMO_DIR: other demos than demo/, as tests/demo.test.ts runs.
+  testDir: process.env.DEMO_DIR ?? 'demo',
   testMatch: '*.demo.ts',
   outputDir: 'demo-results',
   // One at a time: a video is easier to follow without other tests competing for the CPU.

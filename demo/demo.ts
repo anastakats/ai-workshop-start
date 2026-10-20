@@ -9,7 +9,8 @@ import { test as base, type Locator, type Page } from '@playwright/test';
 export { expect } from '@playwright/test';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-export const VIDEOS = fileURLToPath(new URL('../demo-videos', import.meta.url));
+// DEMO_VIDEOS: another directory for the videos, as tests/demo.test.ts uses.
+export const VIDEOS = process.env.DEMO_VIDEOS ?? fileURLToPath(new URL('../demo-videos', import.meta.url));
 
 /** `filter the skills` → `filter-the-skills`. */
 export const slug = (title: string) =>
@@ -79,7 +80,7 @@ export async function type(field: Locator, text: string) {
  * terminal on the page: the command typed, then what it prints, stderr too. Returns its output.
  */
 export async function terminal(page: Page, command: string): Promise<string> {
-  const { stdout } = await promisify(execFile)('sh', ['-c', `${command} 2>&1`], { cwd: ROOT, env: process.env }).catch(
+  const { stdout } = await promisify(execFile)('sh', ['-c', `exec 2>&1; ${command}`], { cwd: ROOT, env: process.env }).catch(
     (error: { stdout?: string }) => ({ stdout: error.stdout ?? '' }),
   );
   await page.setContent(

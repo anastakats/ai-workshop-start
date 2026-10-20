@@ -10,6 +10,9 @@ $ npm run demo                            # every demo: demo-videos/*.webm
 $ npm run demo -- web                     # only demo/web.demo.ts
 ```
 
+What `npm run demo` does, in short: [spec/demo.md](../spec/demo.md), tested by
+[tests/demo.test.ts](../tests/demo.test.ts).
+
 A demo runs against the real web server with GitHub answered from the recording in
 [tests/helpers.ts](../tests/helpers.ts) (as `npm run e2e`): no network, the same video each time.
 

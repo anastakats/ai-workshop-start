@@ -21,13 +21,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # Chromium, before the tests: tests/demo.test.ts records videos with it, the e2e tests use it too.
+      - run: npx playwright install --with-deps chromium
       # With a token, the tests also scan intellij-community on live GitHub. A personal one:
       # code search often answers 429 to the Actions token. Without the secret, that test is skipped.
       - run: npm test
         env:
           GITHUB_TOKEN: ${{ secrets.ATLAS_GITHUB_TOKEN }}
       # The web view in a browser: the base scenarios of spec/web.md.
-      - run: npx playwright install --with-deps chromium
       - run: npm run e2e
       - uses: actions/upload-artifact@v7
         if: failure()
