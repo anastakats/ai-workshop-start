@@ -39,23 +39,30 @@ test('scan prints the repository, then each skill with its first sentence and pi
   assert.equal(example.stderr, '');
 });
 
-test('./fixture: every skill, sorted by name, linked to its file, with a warning for the malformed one', () => {
+test('./fixture: every skill, sorted by name, linked to its file, with a warning for each unreadable front matter', () => {
   const root = pathToFileURL(FIXTURE).href;
   assert.equal(fixture.code, 0);
   assert.equal(
     fixture.stdout,
     [
-      'fixture · 3 skills',
+      'fixture · 6 skills',
       "code-style — Follow the project's code style.",
       `  ${root}/.github/skills/code-style/SKILL.md`,
       'commits — Write commit messages the way this repository does.',
       `  ${root}/.claude/skills/commits/SKILL.md`,
       '  also in .github/skills/commits/SKILL.md',
+      'no-description',
+      `  ${root}/.github/skills/no-description/SKILL.md`,
+      'no-name — Named after its directory.',
+      `  ${root}/.claude/skills/no-name/SKILL.md`,
+      'plain-notes',
+      `  ${root}/.agents/skills/plain-notes/SKILL.md`,
       'release-checklist',
       `  ${root}/.agents/skills/release-checklist/SKILL.md`,
     ].join('\n'),
   );
   assert.deepEqual(fixture.stderr.split('\n'), [
+    'warning: .agents/skills/plain-notes/SKILL.md: no front matter; using the directory name',
     'warning: .agents/skills/release-checklist/SKILL.md: malformed front matter: Nested mappings are not allowed in compact mappings at line 3, column 14; using the directory name',
   ]);
 });
@@ -75,7 +82,7 @@ test('only <name>/SKILL.md in a skill root at the repository root is a skill; an
     assert.doesNotMatch(stdout, /not-a-skill/);
     assert.doesNotMatch(stderr, /not-a-skill|examples|docs\/|packages\/|agent\/skills|(?:^|\s)SKILL\.md/);
   }
-  assert.equal(fixture.stderr.split('\n').length, 1); // the malformed skill's warning, nothing else
+  assert.equal(fixture.stderr.split('\n').length, 2); // the two unreadable front matters, nothing else
 });
 
 test('the CLI prints the result at once and stores nothing', (t) => {

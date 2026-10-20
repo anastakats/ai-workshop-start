@@ -7,6 +7,9 @@ A small repository for the tests.
 | `.claude/skills/commits` | a skill |
 | `.github/skills/code-style` | a skill in another agent's folder |
 | `.agents/skills/release-checklist` | malformed front matter |
+| `.agents/skills/plain-notes` | no front matter |
+| `.claude/skills/no-name` | no `name`: the directory's |
+| `.github/skills/no-description` | no `description` |
 | `.github/skills/commits` | the same skill again: a copy |
 | `SKILL.md` | at the root: not a skill |
 | `docs/skills/guide` | outside a skill root: not a skill |
