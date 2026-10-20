@@ -2,12 +2,12 @@
 // ./fixture and for a small GitHub repository answered in tests/helpers.ts.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
-import { openGitHub } from '../src/core/github.ts';
+import { openGitHub, parseGitHubUrl } from '../src/core/github.ts';
 import { parseSkill } from '../src/core/parse.ts';
 import { replay } from '../src/core/replay.ts';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE } from './helpers.ts';
@@ -130,4 +130,18 @@ test('intellij-community is scanned through the GitHub API in under 5 s', { skip
   assert.equal(scanned.status, 0, scanned.stderr);
   assert.match(scanned.stdout, /^JetBrains\/intellij-community · \d+ skills\n/);
   assert.ok(seconds < 5, `took ${seconds.toFixed(1)} s`);
+});
+
+test('owner/repo is a GitHub repository; an existing directory of that name wins', async (t) => {
+  assert.deepEqual(await atlas(['scan', 'JetBrains/example']), example);
+  assert.equal(parseGitHubUrl('./fixture'), undefined);
+
+  // A directory that also reads as owner/repo.
+  const cwd = mkdtempSync(join(tmpdir(), 'skill-atlas-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  mkdirSync(join(cwd, 'JetBrains/example/.claude/skills/local'), { recursive: true });
+  writeFileSync(join(cwd, 'JetBrains/example/.claude/skills/local/SKILL.md'), '---\nname: local\ndescription: On disk.\n---\n');
+  const scanned = spawnSync(process.execPath, [CLI, 'scan', 'JetBrains/example'], { cwd, encoding: 'utf8' });
+  assert.equal(scanned.status, 0, scanned.stderr);
+  assert.match(scanned.stdout, /^example · 1 skill\nlocal — On disk\.\n {2}file:\/\//);
 });

@@ -26,8 +26,23 @@ jobs:
       - run: npm test
         env:
           GITHUB_TOKEN: ${{ secrets.ATLAS_GITHUB_TOKEN }}
+      # The web view in a browser: the base scenarios of spec/web.md.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/
       # The real CLI on the fixture repository, as a user would run it: it must exit 0.
       - name: Smoke test
         run: |
           ./skill-atlas help
           ./skill-atlas scan ./fixture
+      # The web view, as a user would open it: the page, and a scan behind it.
+      - name: Smoke test, web
+        run: |
+          ./skill-atlas serve &
+          for i in $(seq 20); do curl -sf http://localhost:3000/ > /dev/null && break; sleep 0.5; done
+          curl -sf http://localhost:3000/ | grep -q 'Skill Atlas'
+          curl -sf 'http://localhost:3000/api/scan?repo=./fixture' | grep -q '"name":"commits"'

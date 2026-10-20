@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skill Atlas</title>
+<style>
+  :root {
+    --page: #f8f8f6; --panel: #fff; --line: #e6e6e3; --text: #1d1d1f; --muted: #6b6b70;
+    --accent: #4350c8; --chip: #ececea; --error: #b3261e; --warning: #8a5a00;
+    --mono: ui-monospace, 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: var(--page); color: var(--text); font: 16px/1.4 var(--sans); }
+  header { display: flex; align-items: center; gap: 16px; padding: 16px 32px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  h1 { margin: 0 24px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+  form { display: flex; gap: 12px; flex: 1; max-width: 760px; }
+  input { flex: 1; min-width: 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; font: 18px var(--mono); color: var(--text); }
+  input::placeholder { color: var(--muted); }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button { padding: 12px 28px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: 500 18px var(--sans); cursor: pointer; }
+  button:disabled { opacity: 0.6; cursor: progress; }
+  #repository { display: flex; align-items: center; gap: 12px; margin-left: 24px; font: 18px var(--mono); white-space: nowrap; }
+  #repository[hidden] { display: none; }
+  #count { padding: 4px 14px; border-radius: 999px; background: var(--chip); font: 16px var(--sans); color: var(--muted); }
+  #messages:empty { display: none; }
+  #messages { padding: 8px 32px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+  .error { color: var(--error); }
+  .warning { color: var(--warning); }
+  main { display: flex; flex: 1; min-height: 0; }
+  nav { width: 36%; min-width: 280px; overflow-y: auto; border-right: 1px solid var(--line); padding: 16px 0; }
+  nav button { display: block; width: 100%; padding: 12px 40px; border-radius: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+  nav button:hover { background: #f0f0ed; }
+  nav button[aria-current="true"] { background: #e9eafb; }
+  .name { display: block; font: 18px var(--mono); letter-spacing: 0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .description { display: block; margin-top: 4px; color: var(--muted); font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  article { flex: 1; overflow: auto; padding: 32px 56px; }
+  .placeholder { margin-top: 72px; color: var(--muted); font-size: 18px; }
+  article h2 { margin: 0 0 8px; font: 600 22px var(--mono); }
+  article a { color: var(--accent); word-break: break-all; font-size: 14px; }
+  .copies { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  pre { margin: 24px 0 0; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font: 14px/1.55 var(--mono); white-space: pre-wrap; word-wrap: break-word; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Skill Atlas</h1>
+  <form id="scan">
+    <input id="repo" name="repo" placeholder="owner/repo or a GitHub link" aria-label="Repository" autocomplete="off" spellcheck="false" required>
+    <button id="submit" type="submit">Scan</button>
+  </form>
+  <div id="repository" hidden><span id="id"></span><span id="count"></span></div>
+</header>
+<div id="messages" role="status"></div>
+<main>
+  <nav id="skills" aria-label="Skills"></nav>
+  <article id="skill"><p class="placeholder">Select a skill to read its SKILL.md.</p></article>
+</main>
+<script>
+  'use strict';
+  // Every text goes in through textContent: a SKILL.md is never HTML here.
+  const $ = (id) => document.getElementById(id);
+  const element = (tag, props = {}, ...children) => {
+    const node = Object.assign(document.createElement(tag), props);
+    node.append(...children);
+    return node;
+  };
+  const placeholder = () => $('skill').replaceChildren(element('p', { className: 'placeholder', textContent: 'Select a skill to read its SKILL.md.' }));
+
+  $('scan').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const repo = $('repo').value.trim();
+    if (!repo) return;
+    $('submit').disabled = true;
+    $('submit').textContent = 'Scanning…';
+    $('messages').replaceChildren();
+    try {
+      const response = await fetch(`/api/scan?repo=${encodeURIComponent(repo)}`);
+      const result = await response.json();
+      if (!response.ok) return showError(result.error);
+      show(result);
+    } catch (error) {
+      showError(`Cannot reach the Skill Atlas server: ${error.message}`);
+    } finally {
+      $('submit').disabled = false;
+      $('submit').textContent = 'Scan';
+    }
+  });
+
+  function showError(message) {
+    $('repository').hidden = true;
+    $('skills').replaceChildren();
+    placeholder();
+    $('messages').replaceChildren(element('div', { className: 'error', textContent: message }));
+  }
+
+  function show({ repository, skills, warnings }) {
+    $('id').textContent = repository.id;
+    $('count').textContent = `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}`;
+    $('repository').hidden = false;
+    $('messages').replaceChildren(...warnings.map((warning) => element('div', { className: 'warning', textContent: `warning: ${warning}` })));
+    placeholder();
+    $('skills').replaceChildren(...skills.map((skill) => {
+      const item = element('button', { type: 'button', title: skill.path },
+        element('span', { className: 'name', textContent: skill.name }),
+        element('span', { className: 'description', textContent: skill.description.replace(/\s+/g, ' ').trim() }));
+      item.addEventListener('click', () => select(item, skill));
+      return item;
+    }));
+  }
+
+  function select(item, skill) {
+    for (const other of $('skills').children) other.setAttribute('aria-current', String(other === item));
+    $('skill').replaceChildren(
+      element('h2', { textContent: skill.name }),
+      element('a', { href: skill.link, textContent: skill.link, target: '_blank', rel: 'noopener' }),
+      ...(skill.copies.length ? [element('p', { className: 'copies', textContent: `also in ${skill.copies.join(', ')}` })] : []),
+      element('pre', { textContent: skill.content }));
+  }
+</script>
+</body>
+</html>

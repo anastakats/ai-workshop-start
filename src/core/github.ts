@@ -14,9 +14,14 @@ export type GitHubOptions = {
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
 
-/** `https://github.com/owner/repo`, with or without the scheme, a trailing slash or `.git`. */
+/**
+ * `https://github.com/owner/repo`, with or without the scheme, a trailing slash or `.git`; or
+ * `owner/repo`, whose owner, as on GitHub, has no dots, so `./dir` is never one.
+ */
 export function parseGitHubUrl(input: string): { owner: string; repo: string } | undefined {
-  const match = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(input.trim());
+  const match =
+    /^(?:https?:\/\/)?(?:www\.)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(input.trim()) ??
+    /^([a-z\d-]+)\/([\w.-]+?)(?:\.git)?$/i.exec(input.trim());
   return match ? { owner: match[1], repo: match[2] } : undefined;
 }
 
