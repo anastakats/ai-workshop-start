@@ -1,8 +1,9 @@
 # Repository analysis
 ## Input
-A **GitHub repository** URL, or a local directory
+A **GitHub repository**: a URL or `owner/repo`; or a local directory
+- An existing directory wins over `owner/repo`
 ## Output
-Every skill: **name**, **description**, **link**
+Every skill: **name**, **description**, **link**, its `SKILL.md`
 ## Architecture
 Core: fetch → find → parse. CLI: a *thin client*.
 Skill: id = `repo:path`, name, description, commit

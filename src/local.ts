@@ -1,11 +1,18 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { AtlasError } from './core/errors.ts';
+import { openGitHub, parseGitHubUrl, type GitHubOptions } from './core/github.ts';
 import type { Source } from './core/scan.ts';
 
 /** Never part of a repository's own files. */
 const SKIPPED = new Set(['.git', 'node_modules']);
+
+/** What the user typed: a GitHub repository, or a local directory; an existing directory wins. */
+export async function openInput(input: string, github: GitHubOptions): Promise<Source> {
+  const directory = await stat(input).then((entry) => entry.isDirectory(), () => false);
+  return parseGitHubUrl(input) && !directory ? openGitHub(input, github) : openDirectory(input);
+}
 
 /** A local checkout as a repository: named after its directory, linked with file:// URLs. */
 export async function openDirectory(input: string): Promise<Source> {
