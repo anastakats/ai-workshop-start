@@ -95,3 +95,24 @@ test('stopped: no repository is asked for any more', async () => {
   assert.ok(asked.length <= 8, `${asked.length} asked`);
   assert.ok(asked.every((url) => url.includes('/git/trees/')));
 });
+
+// Live GitHub, so only with GITHUB_TOKEN: JetBrains has close to 900 repositories, a request or
+// more each, and without a token the rate limit allows 60 an hour.
+test('https://github.com/JetBrains, live: every repository scanned, intellij-community among the ones with skills', { skip: !process.env.GITHUB_TOKEN && 'needs GITHUB_TOKEN', timeout: 180_000 }, async () => {
+  let scanned = 0;
+  const result = await scanOrganization('https://github.com/JetBrains', {
+    fetch,
+    token: process.env.GITHUB_TOKEN,
+    progress: (event) => {
+      if ('scanned' in event) scanned = event.scanned;
+    },
+  });
+  assert.equal(result.organization.id, 'JetBrains');
+  assert.ok(result.organization.repositories > 500, `${result.organization.repositories} repositories`);
+  assert.equal(scanned, result.organization.repositories);
+  const ids = result.repositories.map((repository) => repository.id);
+  assert.ok(ids.includes('JetBrains/intellij-community'), ids.join(', '));
+  for (const repository of result.repositories) assert.ok(repository.skills > 0, repository.id);
+  const counts = result.repositories.map((repository) => repository.skills);
+  assert.deepEqual(counts, [...counts].sort((a, b) => b - a));
+});
