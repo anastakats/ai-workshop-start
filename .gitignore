@@ -1,10 +1,20 @@
+# What `npm ci`, the tests, the e2e tests and the demos leave behind: spec/workspace.md.
 node_modules/
+# Playwright: npm run e2e, npm test
 test-results/
 playwright-report/
+blob-report/
+playwright/.cache/
+# npm run demo
 demo-results/
 demo-videos/
-/.idea/.gitignore
-/.idea/ai-workshop-start.iml
-/.idea/misc.xml
-/.idea/modules.xml
-/.idea/vcs.xml
+# TypeScript, logs
+*.tsbuildinfo
+*.log
+# Editors and the OS
+/.idea/
+/.vscode/
+/.fleet/
+*.swp
+.DS_Store
+Thumbs.db
