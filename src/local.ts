@@ -28,7 +28,13 @@ export async function openDirectory(input: string): Promise<Source> {
     repository: { id: name, organization: 'local', name, url: pathToFileURL(root).href, commit: '' },
     paths,
     warnings: [],
-    read: (path) => readFile(join(root, path)).then((bytes) => new Uint8Array(bytes), () => undefined),
+    read: (path) =>
+      readFile(join(root, path)).then(
+        (bytes) => new Uint8Array(bytes),
+        (error: NodeJS.ErrnoException) => ({
+          reason: error.code === 'ENOENT' ? 'deleted since the directory was listed' : `found in the directory, but cannot be read: ${error.message}`,
+        }),
+      ),
   };
 }
 

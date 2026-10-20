@@ -39,11 +39,14 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
   const warnings: string[] = [];
   const paths = options.token ? await searchPaths(github, id) : await treePaths(github, id, sha, warnings);
   const [organization, repo] = id.split('/');
+  const missing = options.token
+    ? `GitHub code search lists it, but it is not in commit ${sha.slice(0, 7)}, the one scanned: the search index lags behind the default branch, so the file was probably moved or deleted since`
+    : `in the tree of commit ${sha.slice(0, 7)}, but GitHub answered 404 when it was read`;
   return {
     repository: { id, organization, name: repo, url: `https://github.com/${id}`, commit: sha },
     paths,
     warnings,
-    read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
+    read: async (path) => (await github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`)) ?? { reason: missing },
   };
 }
 
@@ -134,9 +137,9 @@ export function client({ fetch, token }: GitHubOptions) {
       if (!answers.has(url)) answers.set(url, request(url, notFound));
       return answers.get(url) as Promise<T>;
     },
-    /** A file's bytes at the scanned commit, or undefined if it is not there. */
+    /** A file's bytes at the scanned commit, or undefined if it is not there. With the token: a private repository's are 404 without it. */
     async raw(url: string): Promise<Uint8Array | undefined> {
-      const response = await get(url);
+      const response = await get(url, token ? { headers: { Authorization: headers.Authorization } } : undefined);
       if (response.status === 404) return undefined;
       if (!response.ok) throw new AtlasError(`GitHub answered ${response.status} for ${url}`);
       return new Uint8Array(await response.arrayBuffer());

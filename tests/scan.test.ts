@@ -7,9 +7,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
-import { openGitHub, parseGitHubUrl } from '../src/core/github.ts';
+import { openGitHub, parseGitHubUrl, type Fetch } from '../src/core/github.ts';
 import { parseSkill } from '../src/core/parse.ts';
 import { replay } from '../src/core/replay.ts';
+import { scan } from '../src/core/scan.ts';
+import { openDirectory } from '../src/local.ts';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE } from './helpers.ts';
 
 const fixture = await atlas(['scan', FIXTURE]);
@@ -144,4 +146,75 @@ test('owner/repo is a GitHub repository; an existing directory of that name wins
   const scanned = spawnSync(process.execPath, [CLI, 'scan', 'JetBrains/example'], { cwd, encoding: 'utf8' });
   assert.equal(scanned.status, 0, scanned.stderr);
   assert.match(scanned.stdout, /^example · 1 skill\nlocal — On disk\.\n {2}file:\/\//);
+});
+
+test('a listed SKILL.md that cannot be read → a warning that says why, and the scan goes on', async (t) => {
+  const API = 'https://api.github.com';
+  const RAW = `https://raw.githubusercontent.com/JetBrains/stale/${EXAMPLE_COMMIT}`;
+  const skill = { status: 200, body: '---\nname: kept\ndescription: Still there.\n---\n' };
+  const gone = { status: 404, body: '404: Not Found' };
+  const stale = replay({
+    [`${API}/repos/JetBrains/stale`]: { status: 200, body: { full_name: 'JetBrains/stale', default_branch: 'main' } },
+    [`${API}/repos/JetBrains/stale/commits/main`]: { status: 200, body: { sha: EXAMPLE_COMMIT } },
+    [`${API}/search/code?q=filename:SKILL.md+repo:JetBrains/stale&per_page=100&page=1`]: {
+      status: 200,
+      body: { total_count: 2, items: [{ path: '.agents/skills/kept/SKILL.md' }, { path: '.agents/skills/moved/SKILL.md' }] },
+    },
+    [`${API}/repos/JetBrains/stale/git/trees/${EXAMPLE_COMMIT}?recursive=1`]: {
+      status: 200,
+      body: { truncated: false, tree: ['.agents/skills/kept/SKILL.md', '.agents/skills/moved/SKILL.md'].map((path) => ({ path, mode: '100644', type: 'blob', sha: path })) },
+    },
+    [`${RAW}/.agents/skills/kept/SKILL.md`]: skill,
+    [`${RAW}/.agents/skills/moved/SKILL.md`]: gone,
+  });
+  const commit = EXAMPLE_COMMIT.slice(0, 7);
+
+  // With a token, the paths come from code search, whose index can be older than the scanned commit.
+  const searched = await scan(await openGitHub('JetBrains/stale', { fetch: stale, token: 'test' }));
+  assert.deepEqual(searched.skills.map((s) => s.name), ['kept']);
+  assert.deepEqual(searched.warnings, [
+    `.agents/skills/moved/SKILL.md: GitHub code search lists it, but it is not in commit ${commit}, the one scanned: the search index lags behind the default branch, so the file was probably moved or deleted since; skipped`,
+  ]);
+
+  // Without one, from the tree of the scanned commit itself.
+  const listed = await scan(await openGitHub('JetBrains/stale', { fetch: stale }));
+  assert.deepEqual(listed.skills.map((s) => s.name), ['kept']);
+  assert.deepEqual(listed.warnings, [`.agents/skills/moved/SKILL.md: in the tree of commit ${commit}, but GitHub answered 404 when it was read; skipped`]);
+
+  // A local directory: a file deleted after the directory was listed.
+  const cwd = mkdtempSync(join(tmpdir(), 'skill-atlas-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  for (const name of ['kept', 'moved']) {
+    mkdirSync(join(cwd, `.agents/skills/${name}`), { recursive: true });
+    writeFileSync(join(cwd, `.agents/skills/${name}/SKILL.md`), skill.body);
+  }
+  const directory = await openDirectory(cwd);
+  rmSync(join(cwd, '.agents/skills/moved/SKILL.md'));
+  const local = await scan(directory);
+  assert.deepEqual(local.skills.map((s) => s.name), ['kept']);
+  assert.deepEqual(local.warnings, ['.agents/skills/moved/SKILL.md: deleted since the directory was listed; skipped']);
+});
+
+test('with GITHUB_TOKEN, a private repository: its SKILL.md is read with the token', async () => {
+  const API = 'https://api.github.com';
+  const file = `https://raw.githubusercontent.com/JetBrains/private/${EXAMPLE_COMMIT}/.agents/skills/secret/SKILL.md`;
+  const recorded = replay({
+    [`${API}/repos/JetBrains/private`]: { status: 200, body: { full_name: 'JetBrains/private', default_branch: 'main' } },
+    [`${API}/repos/JetBrains/private/commits/main`]: { status: 200, body: { sha: EXAMPLE_COMMIT } },
+    [`${API}/search/code?q=filename:SKILL.md+repo:JetBrains/private&per_page=100&page=1`]: {
+      status: 200,
+      body: { total_count: 1, items: [{ path: '.agents/skills/secret/SKILL.md' }] },
+    },
+  });
+  // As raw.githubusercontent.com does for a private repository: 404 without the token.
+  const github: Fetch = async (url, init) =>
+    url !== file
+      ? recorded(url, init)
+      : init?.headers?.Authorization === 'Bearer test'
+        ? new Response('---\nname: secret\ndescription: Private.\n---\n')
+        : new Response('404: Not Found', { status: 404 });
+
+  const result = await scan(await openGitHub('JetBrains/private', { fetch: github, token: 'test' }));
+  assert.deepEqual(result.skills.map((s) => s.name), ['secret']);
+  assert.deepEqual(result.warnings, []);
 });
