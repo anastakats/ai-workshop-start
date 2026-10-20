@@ -21,9 +21,16 @@ The base scenarios end to end, in Chromium: `npm run e2e` (e2e/), with GitHub an
 - Every match highlighted, as it is written; for a description, the words around its first match: up to 20 characters before, from a word's start if there is one, cut with `…`
 - A description that does not match, as it is; a skill that does not match, not listed
 - The selected skill stays on the right; a new scan empties the field, an error hides it
-## Next
-Mockups, not built yet.
-### Scan the organization
+## Scan the organization
 ![Scan the organization: github.com/JetBrains, 865 repositories, 27 with skills](web-org.png)
-- A field `github.com/<org>`: the number of repositories, a progress bar while it scans
-- Then `N with skills, among them`: a few repositories with their `N skills`, and `+K more`
+- The same field, `github.com/<org>` (with or without `https://`): an organization, or a user, instead of a repository
+- A card `Scan the organization`: `github.com/<org>` and the number of repositories; a progress bar while it scans, one repository at a time
+- Then `N with skills, among them`: a few (3) repositories, the most skills first, with their `N skills`, and `+K more`, which shows the rest; with 3 or fewer, `N with skills`; with none, `No repositories with skills`
+- A repository in the list: a click scans it, as `owner/repo`
+- Every repository, private ones too if `GITHUB_TOKEN` sees them; its skills *counted*, from its tree at the default branch, not read
+- An empty repository: no skills; a repository GitHub cannot list: a *warning*, the scan goes on; the rate limit or no GitHub at all: the message, the scan stops
+- Without `GITHUB_TOKEN`, GitHub's rate limit allows about 60 repositories an hour
+### Server
+- `GET /api/organization?org=<input>` → one JSON object a line, as the scan goes: `{ organization }` with its `repositories`, the number, once listed; `{ scanned }` after each repository; then `{ organization, repositories, warnings }`, the repositories with skills
+- A clear message before the first line → `400 { error }`; after it, a last line `{ error }`
+- The page goes away → the scan stops asking GitHub

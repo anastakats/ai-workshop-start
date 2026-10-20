@@ -23,6 +23,8 @@ test('the empty page: the title, the field, Scan, and the placeholder', async ({
   await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
   await expect(skills(page)).toHaveCount(0);
   await expect(page.locator('#repository')).toBeHidden();
+  // Nothing above the header: the icons' sprite takes no room.
+  expect((await page.locator('header').boundingBox())?.y).toBe(0);
 });
 
 test('a local directory, scanned with Enter: the repository, its skills sorted by name, the warnings', async ({ page }) => {
@@ -172,4 +174,88 @@ test('the filter keeps the selection; a new scan clears it, an error hides it', 
   await scanButton(page).click();
   await expect(page.locator('.error')).toBeVisible();
   await expect(filter(page)).toBeHidden();
+});
+
+const organization = (page: Page) => page.getByRole('region', { name: 'Organization' });
+
+test('github.com/<org>: the number of repositories, a progress bar, then a few with their skills and +K more', async ({ page }) => {
+  await field(page).fill('github.com/JetBrains');
+  await scanButton(page).click();
+
+  const card = organization(page);
+  await expect(card.getByRole('heading')).toHaveText('Scan the organization');
+  await expect(card.locator('.org')).toHaveText('github.com/JetBrains7 repositories');
+  await expect(card.getByRole('progressbar')).toHaveJSProperty('value', 7);
+  await expect(card.getByRole('progressbar')).toHaveJSProperty('max', 7);
+  await expect(card.locator('.among')).toHaveText('4 with skills, among them');
+  // Uppercase, as in the mockup: only the look.
+  await expect(card.locator('.among')).toHaveCSS('text-transform', 'uppercase');
+  const rows = card.locator('#org-result button');
+  await expect(rows).toHaveText(['mps4 skills', 'kotlin3 skills', 'ai-tools2 skills', '+1 more']);
+  await expect(page.locator('.warning')).toHaveText([/^warning: JetBrains\/moved: Not found on GitHub/]);
+  await expect(page.getByRole('navigation', { name: 'Skills' })).toBeHidden();
+
+  await card.getByRole('button', { name: '+1 more' }).click();
+  await expect(rows).toHaveText(['mps4 skills', 'kotlin3 skills', 'ai-tools2 skills', 'example1 skill']);
+});
+
+test('while an organization scans: Scanning…, its name and a progress bar, then a repository from it is scanned on a click', async ({ page }) => {
+  let answer!: () => void;
+  const answered = new Promise<void>((resolve) => (answer = resolve));
+  await page.route('**/api/organization?*', async (route) => {
+    await answered;
+    await route.continue();
+  });
+  await field(page).fill('https://github.com/JetBrains/');
+  await scanButton(page).click();
+  await expect(page.getByRole('button', { name: 'Scanning…' })).toBeDisabled();
+  await expect(organization(page).locator('#org-id')).toHaveText('github.com/JetBrains');
+  await expect(organization(page).getByRole('progressbar')).toBeVisible();
+  answer();
+  await expect(scanButton(page)).toBeEnabled();
+
+  await page.getByRole('button', { name: '+1 more' }).click();
+  await page.getByRole('button', { name: /^example/ }).click();
+  await expect(field(page)).toHaveValue('JetBrains/example');
+  await expect(organization(page)).toBeHidden();
+  await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
+  await expect(page.locator('nav .name')).toHaveText(['commits']);
+  await expect(page.getByRole('searchbox', { name: 'Filter the skills' })).toBeVisible();
+});
+
+test('an organization GitHub cannot answer: the message, no organization; a repository scans again', async ({ page }) => {
+  await field(page).fill('github.com/not-answered');
+  await scanButton(page).click();
+  await expect(page.locator('.error')).toHaveText('Cannot reach GitHub: not recorded: https://api.github.com/users/not-answered');
+  await expect(organization(page)).toBeHidden();
+  await expect(skills(page)).toHaveCount(0);
+
+  await field(page).fill(FIXTURE);
+  await scanButton(page).click();
+  await expect(page.locator('.error')).toHaveCount(0);
+  await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+});
+
+test('3 or fewer with skills: all of them, no +K more; none: No repositories with skills', async ({ page }) => {
+  const answers: Record<string, unknown[]> = {
+    Few: [{ name: 'a', skills: 1 }, { name: 'b', skills: 5 }].map(({ name, skills }) => ({ id: `Few/${name}`, name, url: `https://github.com/Few/${name}`, skills })),
+    None: [],
+  };
+  await page.route('**/api/organization?*', (route) => {
+    const id = new URL(route.request().url()).searchParams.get('org')!.split('/').pop()!;
+    const organization = { id, url: `https://github.com/${id}`, repositories: 2 };
+    const lines = [{ organization }, { scanned: 1 }, { scanned: 2 }, { organization, repositories: answers[id], warnings: [] }];
+    return route.fulfill({ contentType: 'application/x-ndjson', body: lines.map((line) => `${JSON.stringify(line)}\n`).join('') });
+  });
+  const card = organization(page);
+
+  await field(page).fill('github.com/Few');
+  await scanButton(page).click();
+  await expect(card.locator('.among')).toHaveText('2 with skills');
+  await expect(card.locator('#org-result button')).toHaveText(['a1 skill', 'b5 skills']);
+
+  await field(page).fill('github.com/None');
+  await scanButton(page).click();
+  await expect(card.locator('.among')).toHaveText('No repositories with skills');
+  await expect(card.locator('#org-result button')).toHaveCount(0);
 });

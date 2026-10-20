@@ -1,9 +1,10 @@
 // The web view: one page, and the scan behind it as JSON. Local only, nothing stored; the
 // GitHub token, if any, stays here.
 import { readFile } from 'node:fs/promises';
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 import { AtlasError } from './core/errors.ts';
 import { skillLink } from './core/model.ts';
+import type { OrganizationOptions, OrganizationResult } from './core/organization.ts';
 import { scan, type Source } from './core/scan.ts';
 
 const PAGE = new URL('./web/index.html', import.meta.url);
@@ -12,9 +13,14 @@ const FILTER = new URL('./web/filter.js', import.meta.url);
 export type WebContext = {
   /** Opens what the user asked to scan. */
   open(input: string): Promise<Source>;
+  /** Scans every repository of a GitHub organization. */
+  organization(input: string, options: Pick<OrganizationOptions, 'progress' | 'signal'>): Promise<OrganizationResult>;
 };
 
-/** `GET /`, the page, and `GET /filter.js`, its filter; `GET /api/scan?repo=<input>`, `{ repository, skills, warnings }` or `400 { error }`. */
+/**
+ * `GET /`, the page, and `GET /filter.js`, its filter; `GET /api/scan?repo=<input>`, `{ repository, skills, warnings }`
+ * or `400 { error }`; `GET /api/organization?org=<input>`, see `scanOrganization` below.
+ */
 export function createWebServer(context: WebContext): Server {
   return createServer(async (request, response) => {
     const send = (status: number, type: string, body: string) => {
@@ -26,6 +32,7 @@ export function createWebServer(context: WebContext): Server {
     if (request.method !== 'GET') return json(405, { error: `Not allowed: ${request.method}` });
     if (url.pathname === '/') return send(200, 'text/html', await readFile(PAGE, 'utf8'));
     if (url.pathname === '/filter.js') return send(200, 'text/javascript', await readFile(FILTER, 'utf8'));
+    if (url.pathname === '/api/organization') return scanOrganization(url.searchParams.get('org')?.trim(), response, json);
     if (url.pathname !== '/api/scan') return json(404, { error: `Not found: ${url.pathname}` });
     const input = url.searchParams.get('repo')?.trim();
     if (!input) return json(400, { error: 'Enter owner/repo, a GitHub link or a directory' });
@@ -38,6 +45,31 @@ export function createWebServer(context: WebContext): Server {
       else json(500, { error: `Unexpected error: ${error instanceof Error ? error.message : String(error)}` });
     }
   });
+
+  /**
+   * One JSON object a line, as the scan goes: `{ organization }` once the repositories are listed,
+   * `{ scanned }` after each one, then `{ organization, repositories, warnings }`. Before the first
+   * line, a clear message is `400 { error }`; after it, a last line `{ error }`.
+   */
+  async function scanOrganization(input: string | undefined, response: ServerResponse, json: (status: number, body: unknown) => void) {
+    if (!input) return json(400, { error: 'Enter github.com/<organization>' });
+    const stopped = new AbortController();
+    response.once('close', () => stopped.abort()); // the page went away: the scan stops asking GitHub
+    const line = (body: unknown) => {
+      if (response.destroyed) return;
+      if (!response.headersSent) response.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' });
+      response.write(`${JSON.stringify(body)}\n`);
+    };
+    try {
+      line(await context.organization(input, { progress: line, signal: stopped.signal }));
+      response.end();
+    } catch (error) {
+      const message = error instanceof AtlasError ? error.message : `Unexpected error: ${error instanceof Error ? error.message : String(error)}`;
+      if (!response.headersSent) return json(error instanceof AtlasError ? 400 : 500, { error: message });
+      line({ error: message });
+      response.end();
+    }
+  }
 }
 
 /** Listens on 127.0.0.1 only; the URL to open. */

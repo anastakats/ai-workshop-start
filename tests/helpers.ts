@@ -2,6 +2,7 @@
 import { fileURLToPath } from 'node:url';
 import { run } from '../src/commands.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
+import { scanOrganization, type OrganizationOptions } from '../src/core/organization.ts';
 import { openInput } from '../src/local.ts';
 
 export const FIXTURE = fileURLToPath(new URL('../fixture', import.meta.url));
@@ -39,10 +40,68 @@ const EXAMPLE: Recording = {
   },
 };
 
-const github = replay(EXAMPLE);
+const API = 'https://api.github.com';
+const tree = (paths: string[], truncated = false) => ({
+  status: 200,
+  body: { truncated, tree: paths.map((path) => ({ path, mode: '100644', type: 'blob', sha: path })) },
+});
+const repository = (name: string, default_branch = 'main') => ({
+  full_name: `JetBrains/${name}`,
+  name,
+  html_url: `https://github.com/JetBrains/${name}`,
+  default_branch,
+});
+
+/**
+ * What GitHub answers for a small organization, JetBrains: seven repositories. JetBrains/example
+ * as above; four more with skills, mps with a tree too large to list at once; one without
+ * skills, one empty, and one GitHub cannot find.
+ */
+const ORGANIZATION: Recording = {
+  [`${API}/users/JetBrains`]: { status: 200, body: { login: 'JetBrains', type: 'Organization' } },
+  [`${API}/orgs/JetBrains/repos?type=all&per_page=100&page=1`]: {
+    status: 200,
+    body: ['example', 'kotlin', 'docs', 'empty', 'ai-tools', 'moved', 'mps'].map((name) => repository(name, name === 'mps' ? 'master' : 'main')),
+  },
+  // The copy and the SKILL.md files outside a skill root are no skills.
+  [`${API}/repos/JetBrains/example/git/trees/main?recursive=1`]: tree([
+    'SKILL.md',
+    '.claude/skills/commits/SKILL.md',
+    '.claude/skills/commits/examples/SKILL.md',
+    '.github/skills/commits/SKILL.md',
+    'docs/skills/guide/SKILL.md',
+  ]),
+  [`${API}/repos/JetBrains/kotlin/git/trees/main?recursive=1`]: tree([
+    '.agents/skills/bump-gradle/SKILL.md',
+    '.claude/skills/run-tests/SKILL.md',
+    '.github/skills/review/SKILL.md',
+    'README.md',
+  ]),
+  [`${API}/repos/JetBrains/docs/git/trees/main?recursive=1`]: tree(['README.md', 'skills/SKILL.md']),
+  [`${API}/repos/JetBrains/empty/git/trees/main?recursive=1`]: { status: 409, body: { message: 'Git Repository is empty.' } },
+  [`${API}/repos/JetBrains/ai-tools/git/trees/main?recursive=1`]: tree(['.claude/skills/explain/SKILL.md', '.claude/skills/plan/SKILL.md']),
+  [`${API}/repos/JetBrains/moved/git/trees/main?recursive=1`]: { status: 404, body: { message: 'Not Found' } },
+  // Too large: only .claude/skills, the one skill root it has, is listed.
+  [`${API}/repos/JetBrains/mps/git/trees/master?recursive=1`]: tree(['README.md'], true),
+  [`${API}/repos/JetBrains/mps/git/trees/master`]: {
+    status: 200,
+    body: { truncated: false, tree: [{ path: '.claude', mode: '040000', type: 'tree', sha: 'mps-claude' }] },
+  },
+  [`${API}/repos/JetBrains/mps/git/trees/mps-claude`]: {
+    status: 200,
+    body: { truncated: false, tree: [{ path: 'skills', mode: '040000', type: 'tree', sha: 'mps-claude-skills' }] },
+  },
+  [`${API}/repos/JetBrains/mps/git/trees/mps-claude-skills?recursive=1`]: tree(['a/SKILL.md', 'b/SKILL.md', 'c/SKILL.md', 'd/SKILL.md', 'd/notes.md']),
+};
+
+const github = replay({ ...EXAMPLE, ...ORGANIZATION });
 
 /** What the user typed, opened as the CLI does, with GitHub answering from EXAMPLE through code search. */
 export const open = (input: string) => openInput(input, { fetch: github, token: 'test' });
+
+/** A GitHub organization, scanned as the web view does, with GitHub answering from ORGANIZATION. */
+export const organization = (input: string, options: Pick<OrganizationOptions, 'progress' | 'signal'> = {}) =>
+  scanOrganization(input, { fetch: github, token: 'test', ...options });
 
 /** `skill-atlas <args>`, as the CLI runs it, with GitHub answering from EXAMPLE. */
 export async function atlas(args: string[]) {

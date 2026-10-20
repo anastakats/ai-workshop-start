@@ -49,9 +49,34 @@
   article a { color: var(--accent); word-break: break-all; font-size: 14px; }
   .copies { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
   pre { margin: 24px 0 0; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font: 14px/1.55 var(--mono); white-space: pre-wrap; word-wrap: break-word; }
+  main[hidden], #organization[hidden] { display: none; }
+  .sprite { position: absolute; width: 0; height: 0; }
+  #organization { flex: 1; overflow: auto; padding: 40px 32px; }
+  .card { max-width: 640px; margin: 0 auto; padding: 28px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); }
+  .card h2 { display: flex; align-items: center; gap: 20px; margin: 0 0 20px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .globe { width: 20px; height: 20px; flex: none; color: var(--accent); }
+  .card h2 .globe { box-sizing: content-box; width: 30px; height: 30px; padding: 16px; border-radius: 14px; background: #e9eafb; }
+  .box { padding: 18px 20px; background: var(--page); border: 1px solid var(--line); border-radius: 12px; }
+  .org { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px; background: var(--panel); border: 2px solid var(--accent); border-radius: 12px; font-size: 20px; font-weight: 600; }
+  #org-id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #org-count { padding: 4px 14px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 16px; white-space: nowrap; }
+  #org-count:empty { display: none; }
+  progress { display: block; width: 100%; height: 8px; margin: 14px 0 0; border: 0; border-radius: 999px; background: var(--chip); appearance: none; overflow: hidden; }
+  progress::-webkit-progress-bar { background: var(--chip); }
+  progress::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
+  progress::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+  #org-result:empty { display: none; }
+  #org-result { margin-top: 18px; }
+  .among { margin-bottom: 6px; color: var(--muted); font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; }
+  #org-result button { display: flex; justify-content: space-between; gap: 16px; width: 100%; padding: 6px 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: left; }
+  #org-result button:hover .repo-name { text-decoration: underline; }
+  .repo-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 18px var(--mono); }
+  .repo-skills { color: #3a46a8; font-weight: 600; white-space: nowrap; }
+  #org-result button.more { color: var(--muted); }
 </style>
 </head>
 <body>
+<svg class="sprite" aria-hidden="true"><symbol id="globe-shape" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><ellipse cx="12" cy="12" rx="4.5" ry="10"/><path d="M2 12h20"/></symbol></svg>
 <header>
   <h1>Skill Atlas</h1>
   <form id="scan">
@@ -61,7 +86,7 @@
   <div id="repository" hidden><span id="id"></span><span id="count"></span></div>
 </header>
 <div id="messages" role="status"></div>
-<main>
+<main id="main">
   <nav aria-label="Skills">
     <div id="filter" hidden>
       <input id="query" type="search" placeholder="Filter the skills" aria-label="Filter the skills" autocomplete="off" spellcheck="false">
@@ -71,6 +96,16 @@
   </nav>
   <article id="skill"><p class="placeholder">Select a skill to read its SKILL.md.</p></article>
 </main>
+<section id="organization" aria-label="Organization" hidden>
+  <div class="card">
+    <h2><svg class="globe" aria-hidden="true"><use href="#globe-shape"/></svg>Scan the organization</h2>
+    <div class="box">
+      <div class="org"><svg class="globe" aria-hidden="true"><use href="#globe-shape"/></svg><span id="org-id"></span><span id="org-count"></span></div>
+      <progress id="org-progress" aria-label="Repositories scanned"></progress>
+      <div id="org-result"></div>
+    </div>
+  </div>
+</section>
 <script type="module">
   import { filterSkills } from '/filter.js';
 
@@ -86,6 +121,11 @@
   let selected = null;
   const placeholder = () => $('skill').replaceChildren(element('p', { className: 'placeholder', textContent: 'Select a skill to read its SKILL.md.' }));
 
+  // `github.com/<org>`, without a repository: as parseGitHubOrganization in src/core/organization.ts.
+  const ORGANIZATION = /^(?:https?:\/\/)?(?:www\.)?github\.com\/[a-z\d-]+\/?$/i;
+  // The repositories with skills shown before `+K more`.
+  const FEW = 3;
+
   $('scan').addEventListener('submit', async (event) => {
     event.preventDefault();
     const repo = $('repo').value.trim();
@@ -94,6 +134,7 @@
     $('submit').textContent = 'Scanning…';
     $('messages').replaceChildren();
     try {
+      if (ORGANIZATION.test(repo)) return await scanOrganization(repo);
       const response = await fetch(`/api/scan?repo=${encodeURIComponent(repo)}`);
       const result = await response.json();
       if (!response.ok) return showError(result.error);
@@ -108,7 +149,79 @@
 
   $('query').addEventListener('input', () => list());
 
+  /** The server answers one JSON object a line as the scan goes; see src/web.ts. */
+  async function scanOrganization(input) {
+    showOrganization(input.replace(/^(?:https?:\/\/)?(?:www\.)?/i, '').replace(/\/$/, ''));
+    const response = await fetch(`/api/organization?org=${encodeURIComponent(input)}`);
+    if (!response.ok) return showError((await response.json()).error);
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let rest = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const lines = (rest + value).split('\n');
+      rest = lines.pop();
+      for (const line of lines.filter(Boolean)) {
+        const answer = JSON.parse(line);
+        if ('error' in answer) return showError(answer.error);
+        if ('repositories' in answer) return showRepositories(answer);
+        if ('organization' in answer) showListed(answer.organization);
+        else $('org-progress').value = answer.scanned;
+      }
+    }
+    showError('The organization scan stopped before the end');
+  }
+
+  function showOrganization(name) {
+    $('repository').hidden = true;
+    scanned = [];
+    selected = null;
+    $('filter').hidden = true;
+    $('query').value = '';
+    $('skills').replaceChildren();
+    placeholder();
+    $('main').hidden = true;
+    $('organization').hidden = false;
+    $('org-id').textContent = name;
+    $('org-count').textContent = '';
+    $('org-progress').removeAttribute('value'); // indeterminate, until the repositories are counted
+    $('org-result').replaceChildren();
+  }
+
+  function showListed(organization) {
+    $('org-id').textContent = `github.com/${organization.id}`;
+    $('org-count').textContent = `${organization.repositories} ${organization.repositories === 1 ? 'repository' : 'repositories'}`;
+    $('org-progress').max = Math.max(organization.repositories, 1);
+    $('org-progress').value = 0;
+  }
+
+  function showRepositories({ organization, repositories, warnings }) {
+    showListed(organization);
+    $('org-progress').value = $('org-progress').max;
+    $('messages').replaceChildren(...warnings.map((warning) => element('div', { className: 'warning', textContent: `warning: ${warning}` })));
+    const among = repositories.length === 0 ? 'No repositories with skills'
+      : `${repositories.length} with skills${repositories.length > FEW ? ', among them' : ''}`;
+    const item = (repository) => {
+      const button = element('button', { type: 'button', title: `Scan ${repository.id}` },
+        element('span', { className: 'repo-name', textContent: repository.name }),
+        element('span', { className: 'repo-skills', textContent: `${repository.skills} ${repository.skills === 1 ? 'skill' : 'skills'}` }));
+      button.addEventListener('click', () => {
+        $('repo').value = repository.id;
+        $('scan').requestSubmit();
+      });
+      return button;
+    };
+    const items = repositories.slice(0, FEW).map(item);
+    if (repositories.length > FEW) {
+      const more = element('button', { type: 'button', className: 'more', textContent: `+${repositories.length - FEW} more` });
+      more.addEventListener('click', () => more.replaceWith(...repositories.slice(FEW).map(item)));
+      items.push(more);
+    }
+    $('org-result').replaceChildren(element('div', { className: 'among', textContent: among }), ...items);
+  }
+
   function showError(message) {
+    showSkills();
     $('repository').hidden = true;
     scanned = [];
     selected = null;
@@ -119,7 +232,13 @@
     $('messages').replaceChildren(element('div', { className: 'error', textContent: message }));
   }
 
+  function showSkills() {
+    $('organization').hidden = true;
+    $('main').hidden = false;
+  }
+
   function show({ repository, skills, warnings }) {
+    showSkills();
     $('id').textContent = repository.id;
     $('count').textContent = `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}`;
     $('repository').hidden = false;

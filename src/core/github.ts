@@ -1,4 +1,4 @@
-import { AtlasError } from './errors.ts';
+import { AtlasError, EmptyRepository, GitHubUnavailable } from './errors.ts';
 import { SKILL_ROOTS } from './find.ts';
 import type { Source } from './scan.ts';
 
@@ -11,7 +11,7 @@ export type GitHubOptions = {
   token?: string;
 };
 
-const API = 'https://api.github.com';
+export const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
 
 /**
@@ -63,14 +63,17 @@ async function searchPaths(github: Client, id: string): Promise<string[]> {
 
 type Tree = { truncated: boolean; tree: { path: string; mode: string; type: string; sha: string }[] };
 
-/** The whole tree at once, or only the skill roots when it is too large for one answer. */
-async function treePaths(github: Client, id: string, sha: string, warnings: string[]): Promise<string[]> {
-  const tree = await github.json<Tree>(`${API}/repos/${id}/git/trees/${sha}?recursive=1`);
+/**
+ * The whole tree at once, or only the skill roots when it is too large for one answer. `ref`, a
+ * commit or a branch name, path-encoded.
+ */
+export async function treePaths(github: Client, id: string, ref: string, warnings: string[]): Promise<string[]> {
+  const tree = await github.json<Tree>(`${API}/repos/${id}/git/trees/${ref}?recursive=1`);
   if (!tree.truncated) return files(tree);
   warnings.push(`the tree is too large to list at once; looked only in ${SKILL_ROOTS.join(', ')} (GITHUB_TOKEN searches everywhere)`);
   const paths: string[] = [];
   for (const root of SKILL_ROOTS) {
-    const rootSha = await directory(github, id, sha, root);
+    const rootSha = await directory(github, id, ref, root);
     if (!rootSha) continue;
     const subtree = await github.json<Tree>(`${API}/repos/${id}/git/trees/${rootSha}?recursive=1`);
     paths.push(...files(subtree).map((path) => `${root}/${path}`));
@@ -95,9 +98,9 @@ function files(tree: Tree): string[] {
   return tree.tree.filter((item) => item.type === 'blob' && item.mode !== '120000').map((item) => item.path);
 }
 
-type Client = ReturnType<typeof client>;
+export type Client = ReturnType<typeof client>;
 
-function client({ fetch, token }: GitHubOptions) {
+export function client({ fetch, token }: GitHubOptions) {
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const answers = new Map<string, Promise<unknown>>(); // the root tree is asked for once per skill root
@@ -106,7 +109,7 @@ function client({ fetch, token }: GitHubOptions) {
     try {
       return await fetch(url, init);
     } catch (error) {
-      throw new AtlasError(`Cannot reach GitHub: ${describe(error)}`);
+      throw new GitHubUnavailable(`Cannot reach GitHub: ${describe(error)}`);
     }
   }
 
@@ -117,10 +120,11 @@ function client({ fetch, token }: GitHubOptions) {
     const message = (body as { message?: unknown } | undefined)?.message;
     const text = typeof message === 'string' ? message : '';
     if (response.status === 404) throw new AtlasError(notFound);
+    if (response.status === 409 && /empty/i.test(text)) throw new EmptyRepository(`The repository is empty: ${url}`);
     if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) {
-      throw new AtlasError(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
+      throw new GitHubUnavailable(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
     }
-    if (response.status === 401) throw new AtlasError('GitHub rejected the token in GITHUB_TOKEN');
+    if (response.status === 401) throw new GitHubUnavailable('GitHub rejected the token in GITHUB_TOKEN');
     throw new AtlasError(`GitHub answered ${response.status} for ${url}${text && `: ${text}`}`);
   }
 
@@ -140,7 +144,7 @@ function client({ fetch, token }: GitHubOptions) {
   };
 }
 
-function encodePath(path: string): string {
+export function encodePath(path: string): string {
   return path.split('/').map(encodeURIComponent).join('/');
 }
 
