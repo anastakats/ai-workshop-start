@@ -9,9 +9,12 @@ export type Source = {
   paths: string[];
   /** What listing the files had to leave out. */
   warnings: string[];
-  /** The file's bytes, or undefined if it is not there. */
-  read(path: string): Promise<Uint8Array | undefined>;
+  /** The file's bytes, or why a listed file cannot be read. */
+  read(path: string): Promise<Uint8Array | Missing>;
 };
+
+/** A listed file that is not there after all: `reason` tells the user what went wrong, and why. */
+export type Missing = { reason: string };
 
 export type ScanResult = { repository: Repository; skills: Skill[]; warnings: string[] };
 
@@ -29,7 +32,7 @@ export async function scan(source: Source): Promise<ScanResult> {
 
 async function readSkill(source: Source, file: SkillFile): Promise<{ skill?: Skill; warning?: string }> {
   const bytes = await source.read(file.path);
-  if (!bytes) return { warning: `${file.path}: listed, but not found at the scanned commit; skipped` };
+  if (!(bytes instanceof Uint8Array)) return { warning: `${file.path}: ${bytes.reason}; skipped` };
   const content = new TextDecoder().decode(bytes);
   const parsed = parseSkill(content);
   const skill: Skill = {

@@ -12,6 +12,10 @@ Skill: id = `repo:path`, name, description, commit
 - The name: front matter, else the directory
 - The link pins the *scanned commit*
 - Malformed front matter → a *warning*, the scan goes on
+- A listed `SKILL.md` that cannot be read → a *warning* that says why, the scan goes on:
+  - GitHub code search lists a file not in the scanned commit → its index lags behind the default branch, the file was probably moved or deleted
+  - In the tree, but GitHub answers 404 for it → the commit and the 404
+  - A local file deleted since the directory was listed, or unreadable → that, with the error
 - Unreachable repository → a clear message, exit code 1
 ## Where skills live
 As the [Agent Skills format](https://agentskills.io/specification) defines: a skill is a *directory* with a `SKILL.md`.

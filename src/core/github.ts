@@ -39,11 +39,14 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
   const warnings: string[] = [];
   const paths = options.token ? await searchPaths(github, id) : await treePaths(github, id, sha, warnings);
   const [organization, repo] = id.split('/');
+  const missing = options.token
+    ? `GitHub code search lists it, but it is not in commit ${sha.slice(0, 7)}, the one scanned: the search index lags behind the default branch, so the file was probably moved or deleted since`
+    : `in the tree of commit ${sha.slice(0, 7)}, but GitHub answered 404 when it was read`;
   return {
     repository: { id, organization, name: repo, url: `https://github.com/${id}`, commit: sha },
     paths,
     warnings,
-    read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
+    read: async (path) => (await github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`)) ?? { reason: missing },
   };
 }
 
