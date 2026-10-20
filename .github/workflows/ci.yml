@@ -35,6 +35,12 @@ jobs:
         with:
           name: playwright-traces
           path: test-results/
+      # A screenshot of every step of the e2e tests (spec/screenshots.md), in the run's artifacts.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: screenshots/
       # The demos (demo/README.md): a video of each, for the pull request, in the run's artifacts.
       - run: npm run demo
       - uses: actions/upload-artifact@v7
@@ -54,3 +60,100 @@ jobs:
           for i in $(seq 20); do curl -sf http://localhost:3000/ > /dev/null && break; sleep 0.5; done
           curl -sf http://localhost:3000/ | grep -q 'Skill Atlas'
           curl -sf 'http://localhost:3000/api/scan?repo=./fixture' | grep -q '"name":"commits"'
+
+  # The e2e tests on the pull request's base and on the pull request, a screenshot at each step
+  # (spec/screenshots.md): the steps that differ, highlighted, in a comment on the pull request;
+  # every screenshot and the report, in the `screenshots` artifact.
+  screenshots:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # The images of the comment, on the `screenshots` branch.
+      contents: write
+      pull-requests: write
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+      PR: ${{ github.event.pull_request.number }}
+      # Where the comment's images are: a directory of the `screenshots` branch for each run.
+      IMAGES: pr-${{ github.event.pull_request.number }}/${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # Both runs in this same directory: a screenshot shows the fixture's absolute path. A failing
+      # test does not stop the comparison: its steps until then are compared; the test job fails.
+      - name: Screenshots of the pull request
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run e2e || echo "::warning::e2e tests failed: the steps after a failure have no screenshot"
+          mkdir -p screenshots && mv screenshots "$RUNNER_TEMP/pr"
+      # Its base's own e2e tests; before e2e/steps.ts, none screenshotted: every step is added.
+      - name: Screenshots of ${{ github.event.pull_request.base.ref }}
+        run: |
+          git checkout --detach "$BASE_SHA"
+          npm ci
+          npx playwright install chromium
+          npm run e2e || echo "::warning::e2e tests failed on $BASE_REF: the steps after a failure have no screenshot"
+          mkdir -p screenshots && mv screenshots "$RUNNER_TEMP/base"
+      - name: Compare
+        run: |
+          git checkout --detach "$GITHUB_SHA"
+          npm ci
+          mkdir -p comparison && mv "$RUNNER_TEMP/base" comparison/base && mv "$RUNNER_TEMP/pr" comparison/pr
+          node scripts/compare-screenshots.ts comparison/base comparison/pr comparison/diff --base-name "$BASE_REF" \
+            --images-url "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/screenshots/$IMAGES"
+          cat comparison/diff/report.md >> "$GITHUB_STEP_SUMMARY"
+      # base/ and pr/, every screenshot; diff/, the report (index.html) and the steps that differ.
+      - uses: actions/upload-artifact@v7
+        id: artifact
+        with:
+          name: screenshots
+          path: comparison/
+      # A pull request from a fork has no right to push or comment: then, only the artifact.
+      - name: Attach the differences to the pull request
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: |
+          publish="$RUNNER_TEMP/publish"
+          if git fetch -q origin screenshots 2> /dev/null; then git worktree add -q --detach "$publish" FETCH_HEAD; else git worktree add -q --orphan -b screenshots "$publish"; fi
+          # This run's images replace the pull request's earlier ones.
+          (cd "$publish" && git rm -rq --ignore-unmatch "pr-$PR")
+          mkdir -p "$publish/$IMAGES"
+          (cd comparison/diff && find . -name '*.png' -exec cp --parents {} "$publish/$IMAGES/" \;)
+          cd "$publish"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -qm "Screenshots of #$PR, run $GITHUB_RUN_ID"
+            # Other pull requests push there too, each to its own directory: rebase and retry.
+            pushed=
+            for attempt in 1 2 3 4 5; do
+              if git push -q origin HEAD:refs/heads/screenshots; then pushed=1; break; fi
+              git fetch -q origin screenshots && git rebase -q FETCH_HEAD
+            done
+            [ -n "$pushed" ]
+          fi
+          cd "$GITHUB_WORKSPACE"
+          marker='<!-- screenshot-comparison -->'
+          {
+            echo "$marker"
+            cat comparison/diff/report.md
+            echo
+            echo "Every screenshot, of $BASE_REF and of this pull request, and the report (\`diff/index.html\`): the [\`screenshots\` artifact]($ARTIFACT_URL)."
+          } > comment.md
+          # One comment, updated by each run.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@comment.md > /dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@comment.md > /dev/null
+          fi

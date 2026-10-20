@@ -3,6 +3,7 @@
 Read [./spec](spec/) first. Update it with the code.
 ## Tests
 Integration tests for every case in the spec.
+E2E tests: one `step()` at a time, each one screenshotted; see [spec/screenshots.md](spec/screenshots.md).
 ## Definition of done
 - All tests pass locally
 ## Demo

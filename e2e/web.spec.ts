@@ -1,9 +1,10 @@
-// The base scenarios of spec/web.md, in a browser: what a user types, clicks and sees.
+// The base scenarios of spec/web.md, in a browser: what a user types, clicks and sees; one step at
+// a time, each one screenshotted (e2e/steps.ts).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
 import { EXAMPLE_COMMIT, FIXTURE } from '../tests/helpers.ts';
+import { expect, test, type Page } from './steps.ts';
 
 const FIXTURE_SKILLS = ['code-style', 'commits', 'no-description', 'no-name', 'plain-notes', 'release-checklist'];
 
@@ -15,228 +16,296 @@ const field = (page: Page) => page.getByRole('textbox', { name: 'Repository' });
 const scanButton = (page: Page) => page.getByRole('button', { name: 'Scan' });
 const skills = (page: Page) => page.getByRole('navigation', { name: 'Skills' }).getByRole('button');
 
-test('the empty page: the title, the field, Scan, and the placeholder', async ({ page }) => {
-  await expect(page).toHaveTitle('Skill Atlas');
-  await expect(page.getByRole('heading', { name: 'Skill Atlas' })).toBeVisible();
-  await expect(field(page)).toHaveAttribute('placeholder', 'owner/repo or a GitHub link');
-  await expect(scanButton(page)).toBeEnabled();
-  await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
-  await expect(skills(page)).toHaveCount(0);
-  await expect(page.locator('#repository')).toBeHidden();
-  // Nothing above the header: the icons' sprite takes no room.
-  expect((await page.locator('header').boundingBox())?.y).toBe(0);
+test('the empty page: the title, the field, Scan, and the placeholder', async ({ page, step }) => {
+  await step('the empty page', async () => {
+    await expect(page).toHaveTitle('Skill Atlas');
+    await expect(page.getByRole('heading', { name: 'Skill Atlas' })).toBeVisible();
+    await expect(field(page)).toHaveAttribute('placeholder', 'owner/repo or a GitHub link');
+    await expect(scanButton(page)).toBeEnabled();
+    await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
+    await expect(skills(page)).toHaveCount(0);
+    await expect(page.locator('#repository')).toBeHidden();
+    // Nothing above the header: the icons' sprite takes no room.
+    expect((await page.locator('header').boundingBox())?.y).toBe(0);
+  });
 });
 
-test('a local directory, scanned with Enter: the repository, its skills sorted by name, the warnings', async ({ page }) => {
-  await field(page).fill(FIXTURE);
-  await field(page).press('Enter');
+test('a local directory, scanned with Enter: the repository, its skills sorted by name, the warnings', async ({ page, step }) => {
+  await step('a local directory typed', async () => {
+    await field(page).fill(FIXTURE);
+    await expect(field(page)).toHaveValue(FIXTURE);
+  });
 
-  await expect(page.locator('#repository')).toHaveText('fixture6 skills');
-  await expect(page.locator('nav .name')).toHaveText(FIXTURE_SKILLS);
-  await expect(skills(page).filter({ hasText: 'commits' }).locator('.description')).toHaveText(
-    'Write commit messages the way this repository does. Use for every commit.',
-  );
-  await expect(page.locator('.warning')).toHaveText([
-    /^warning: \.agents\/skills\/plain-notes\/SKILL\.md: no front matter/,
-    /^warning: \.agents\/skills\/release-checklist\/SKILL\.md: malformed front matter/,
-  ]);
-  await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
+  await step('scanned with Enter', async () => {
+    await field(page).press('Enter');
+    await expect(page.locator('#repository')).toHaveText('fixture6 skills');
+    await expect(page.locator('nav .name')).toHaveText(FIXTURE_SKILLS);
+    await expect(skills(page).filter({ hasText: 'commits' }).locator('.description')).toHaveText(
+      'Write commit messages the way this repository does. Use for every commit.',
+    );
+    await expect(page.locator('.warning')).toHaveText([
+      /^warning: \.agents\/skills\/plain-notes\/SKILL\.md: no front matter/,
+      /^warning: \.agents\/skills\/release-checklist\/SKILL\.md: malformed front matter/,
+    ]);
+    await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
+  });
 });
 
-test('selecting a skill shows its SKILL.md as it is, its link and its copies; another selection replaces it', async ({ page }) => {
-  await field(page).fill(FIXTURE);
-  await scanButton(page).click();
+test('selecting a skill shows its SKILL.md as it is, its link and its copies; another selection replaces it', async ({ page, step }) => {
+  await step('scanned', async () => {
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  });
 
   const commits = skills(page).filter({ hasText: 'commits' });
-  await commits.click();
-  await expect(commits).toHaveAttribute('aria-current', 'true');
   const skill = page.locator('article');
-  await expect(skill.getByRole('heading')).toHaveText('commits');
-  const link = `${pathToFileURL(FIXTURE).href}/.claude/skills/commits/SKILL.md`;
-  await expect(skill.getByRole('link')).toHaveAttribute('href', link);
-  await expect(skill.locator('.copies')).toHaveText('also in .github/skills/commits/SKILL.md');
-  // Front matter and Markdown, as text: not rendered.
-  await expect(skill.locator('pre')).toHaveText(readFileSync(join(FIXTURE, '.claude/skills/commits/SKILL.md'), 'utf8'));
+  await step('commits selected', async () => {
+    await commits.click();
+    await expect(commits).toHaveAttribute('aria-current', 'true');
+    await expect(skill.getByRole('heading')).toHaveText('commits');
+    const link = `${pathToFileURL(FIXTURE).href}/.claude/skills/commits/SKILL.md`;
+    await expect(skill.getByRole('link')).toHaveAttribute('href', link);
+    await expect(skill.locator('.copies')).toHaveText('also in .github/skills/commits/SKILL.md');
+    // Front matter and Markdown, as text: not rendered.
+    await expect(skill.locator('pre')).toHaveText(readFileSync(join(FIXTURE, '.claude/skills/commits/SKILL.md'), 'utf8'));
+  });
 
-  const codeStyle = skills(page).filter({ hasText: 'code-style' });
-  await codeStyle.click();
-  await expect(codeStyle).toHaveAttribute('aria-current', 'true');
-  await expect(commits).toHaveAttribute('aria-current', 'false');
-  await expect(skill.getByRole('heading')).toHaveText('code-style');
-  await expect(skill.locator('.copies')).toHaveCount(0);
+  await step('code-style selected instead', async () => {
+    const codeStyle = skills(page).filter({ hasText: 'code-style' });
+    await codeStyle.click();
+    await expect(codeStyle).toHaveAttribute('aria-current', 'true');
+    await expect(commits).toHaveAttribute('aria-current', 'false');
+    await expect(skill.getByRole('heading')).toHaveText('code-style');
+    await expect(skill.locator('.copies')).toHaveCount(0);
+  });
 });
 
-test('owner/repo on GitHub: the skill, linked at the scanned commit, with its SKILL.md', async ({ page }) => {
-  await field(page).fill('JetBrains/example');
-  await scanButton(page).click();
+test('owner/repo on GitHub: the skill, linked at the scanned commit, with its SKILL.md', async ({ page, step }) => {
+  await step('JetBrains/example scanned', async () => {
+    await field(page).fill('JetBrains/example');
+    await scanButton(page).click();
+    await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
+    await expect(page.locator('nav .name')).toHaveText(['commits']);
+  });
 
-  await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
-  await expect(page.locator('nav .name')).toHaveText(['commits']);
-  await skills(page).first().click();
-  await expect(page.locator('article').getByRole('link')).toHaveAttribute(
-    'href',
-    `https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`,
-  );
-  await expect(page.locator('article pre')).toContainText('# Commits');
+  await step('its skill selected', async () => {
+    await skills(page).first().click();
+    await expect(page.locator('article').getByRole('link')).toHaveAttribute(
+      'href',
+      `https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`,
+    );
+    await expect(page.locator('article pre')).toContainText('# Commits');
+  });
 });
 
-test("an unreachable repository: the CLI's message, no skills; the next scan works", async ({ page }) => {
-  await field(page).fill(FIXTURE);
-  await scanButton(page).click();
-  await skills(page).first().click();
+test("an unreachable repository: the CLI's message, no skills; the next scan works", async ({ page, step }) => {
+  await step('a skill selected', async () => {
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await skills(page).first().click();
+    await expect(page.locator('article').getByRole('heading')).toHaveText('code-style');
+  });
 
-  const missing = join(FIXTURE, 'no-such-directory');
-  await field(page).fill(missing);
-  await scanButton(page).click();
-  await expect(page.locator('.error')).toHaveText(`Not a GitHub URL or a readable directory: ${missing}`);
-  await expect(skills(page)).toHaveCount(0);
-  await expect(page.locator('#repository')).toBeHidden();
-  await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
+  await step('an unreachable repository', async () => {
+    const missing = join(FIXTURE, 'no-such-directory');
+    await field(page).fill(missing);
+    await scanButton(page).click();
+    await expect(page.locator('.error')).toHaveText(`Not a GitHub URL or a readable directory: ${missing}`);
+    await expect(skills(page)).toHaveCount(0);
+    await expect(page.locator('#repository')).toBeHidden();
+    await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
+  });
 
-  await field(page).fill(FIXTURE);
-  await scanButton(page).click();
-  await expect(page.locator('.error')).toHaveCount(0);
-  await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  await step('the next scan works', async () => {
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await expect(page.locator('.error')).toHaveCount(0);
+    await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  });
 });
 
-test('while it scans, Scan waits as Scanning…', async ({ page }) => {
+test('while it scans, Scan waits as Scanning…', async ({ page, step }) => {
   let answer!: () => void;
   const answered = new Promise<void>((resolve) => (answer = resolve));
   await page.route('**/api/scan?*', async (route) => {
     await answered;
     await route.continue();
   });
-  await field(page).fill(FIXTURE);
-  await scanButton(page).click();
-  await expect(page.getByRole('button', { name: 'Scanning…' })).toBeDisabled();
-  answer();
-  await expect(scanButton(page)).toBeEnabled();
-  await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  await step('scanning', async () => {
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await expect(page.getByRole('button', { name: 'Scanning…' })).toBeDisabled();
+  });
+
+  await step('scanned', async () => {
+    answer();
+    await expect(scanButton(page)).toBeEnabled();
+    await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  });
 });
 
-test('a long description stays on one line, cut with …', async ({ page }) => {
-  await page.setViewportSize({ width: 900, height: 700 });
-  await field(page).fill(FIXTURE);
-  await scanButton(page).click();
+test('a long description stays on one line, cut with …', async ({ page, step }) => {
+  await step('scanned in a narrow window', async () => {
+    await page.setViewportSize({ width: 900, height: 700 });
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
 
-  const description = skills(page).filter({ hasText: 'commits' }).locator('.description');
-  await expect(description).toHaveCSS('text-overflow', 'ellipsis');
-  await expect(description).toHaveCSS('white-space', 'nowrap');
-  const { scrollWidth, clientWidth } = await description.evaluate((node) => ({ scrollWidth: node.scrollWidth, clientWidth: node.clientWidth }));
-  expect(scrollWidth).toBeGreaterThan(clientWidth);
+    const description = skills(page).filter({ hasText: 'commits' }).locator('.description');
+    await expect(description).toHaveCSS('text-overflow', 'ellipsis');
+    await expect(description).toHaveCSS('white-space', 'nowrap');
+    const { scrollWidth, clientWidth } = await description.evaluate((node) => ({ scrollWidth: node.scrollWidth, clientWidth: node.clientWidth }));
+    expect(scrollWidth).toBeGreaterThan(clientWidth);
+  });
 });
 
 const filter = (page: Page) => page.getByRole('searchbox', { name: 'Filter the skills' });
 
-test('the filter: N of M, by name or description, case-insensitive, the matches highlighted', async ({ page }) => {
-  await expect(filter(page)).toBeHidden();
-  await field(page).fill(FIXTURE);
-  await scanButton(page).click();
-  await expect(filter(page)).toBeVisible();
-  await expect(filter(page)).toHaveAttribute('placeholder', 'Filter the skills');
-  await expect(page.locator('#matches')).toBeHidden();
+test('the filter: N of M, by name or description, case-insensitive, the matches highlighted', async ({ page, step }) => {
+  await step('scanned: the filter, empty', async () => {
+    await expect(filter(page)).toBeHidden();
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await expect(filter(page)).toBeVisible();
+    await expect(filter(page)).toHaveAttribute('placeholder', 'Filter the skills');
+    await expect(page.locator('#matches')).toBeHidden();
+  });
 
-  await filter(page).fill('COMMIT');
-  await expect(page.locator('#matches')).toHaveText('2 of 6');
-  await expect(page.locator('nav .name')).toHaveText(['code-style', 'commits']);
-  await expect(page.locator('nav .name mark')).toHaveText(['commit']);
-  const codeStyle = skills(page).filter({ hasText: 'code-style' }).locator('.description');
-  await expect(codeStyle).toHaveText('…style. Use before committing Kotlin or Java changes.');
-  await expect(codeStyle.locator('mark')).toHaveText(['commit']);
-  await expect(skills(page).filter({ hasText: 'commits' }).locator('.description mark')).toHaveText(['commit', 'commit']);
+  await step('COMMIT: 2 of 6, highlighted', async () => {
+    await filter(page).fill('COMMIT');
+    await expect(page.locator('#matches')).toHaveText('2 of 6');
+    await expect(page.locator('nav .name')).toHaveText(['code-style', 'commits']);
+    await expect(page.locator('nav .name mark')).toHaveText(['commit']);
+    const codeStyle = skills(page).filter({ hasText: 'code-style' }).locator('.description');
+    await expect(codeStyle).toHaveText('…style. Use before committing Kotlin or Java changes.');
+    await expect(codeStyle.locator('mark')).toHaveText(['commit']);
+    await expect(skills(page).filter({ hasText: 'commits' }).locator('.description mark')).toHaveText(['commit', 'commit']);
+  });
 
-  await filter(page).fill('no such skill');
-  await expect(page.locator('#matches')).toHaveText('0 of 6');
-  await expect(skills(page)).toHaveCount(0);
+  await step('no such skill: 0 of 6', async () => {
+    await filter(page).fill('no such skill');
+    await expect(page.locator('#matches')).toHaveText('0 of 6');
+    await expect(skills(page)).toHaveCount(0);
+  });
 
-  await filter(page).fill('');
-  await expect(page.locator('#matches')).toBeHidden();
-  await expect(page.locator('nav .name')).toHaveText(FIXTURE_SKILLS);
-  await expect(page.locator('nav mark')).toHaveCount(0);
+  await step('emptied: every skill', async () => {
+    await filter(page).fill('');
+    await expect(page.locator('#matches')).toBeHidden();
+    await expect(page.locator('nav .name')).toHaveText(FIXTURE_SKILLS);
+    await expect(page.locator('nav mark')).toHaveCount(0);
+  });
 });
 
-test('the filter keeps the selection; a new scan clears it, an error hides it', async ({ page }) => {
-  await field(page).fill(FIXTURE);
-  await scanButton(page).click();
-  await skills(page).filter({ hasText: 'commits' }).click();
+test('the filter keeps the selection; a new scan clears it, an error hides it', async ({ page, step }) => {
+  await step('commits selected', async () => {
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await skills(page).filter({ hasText: 'commits' }).click();
+    await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
+  });
 
-  await filter(page).fill('commit');
-  await expect(skills(page).filter({ hasText: 'commits' })).toHaveAttribute('aria-current', 'true');
-  await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
-  await skills(page).filter({ hasText: 'code-style' }).click();
-  await expect(page.locator('article').getByRole('heading')).toHaveText('code-style');
+  await step('filtered: the selection kept', async () => {
+    await filter(page).fill('commit');
+    await expect(skills(page).filter({ hasText: 'commits' })).toHaveAttribute('aria-current', 'true');
+    await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
+  });
 
-  await scanButton(page).click();
-  await expect(filter(page)).toHaveValue('');
-  await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  await step('code-style selected in the filtered list', async () => {
+    await skills(page).filter({ hasText: 'code-style' }).click();
+    await expect(page.locator('article').getByRole('heading')).toHaveText('code-style');
+  });
 
-  await field(page).fill(join(FIXTURE, 'no-such-directory'));
-  await scanButton(page).click();
-  await expect(page.locator('.error')).toBeVisible();
-  await expect(filter(page)).toBeHidden();
+  await step('a new scan: the filter emptied', async () => {
+    await scanButton(page).click();
+    await expect(filter(page)).toHaveValue('');
+    await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  });
+
+  await step('an error: the filter hidden', async () => {
+    await field(page).fill(join(FIXTURE, 'no-such-directory'));
+    await scanButton(page).click();
+    await expect(page.locator('.error')).toBeVisible();
+    await expect(filter(page)).toBeHidden();
+  });
 });
 
 const organization = (page: Page) => page.getByRole('region', { name: 'Organization' });
 
-test('github.com/<org>: the number of repositories, a progress bar, then a few with their skills and +K more', async ({ page }) => {
-  await field(page).fill('github.com/JetBrains');
-  await scanButton(page).click();
-
+test('github.com/<org>: the number of repositories, a progress bar, then a few with their skills and +K more', async ({ page, step }) => {
   const card = organization(page);
-  await expect(card.getByRole('heading')).toHaveText('Scan the organization');
-  await expect(card.locator('.org')).toHaveText('github.com/JetBrains7 repositories');
-  await expect(card.getByRole('progressbar')).toHaveJSProperty('value', 7);
-  await expect(card.getByRole('progressbar')).toHaveJSProperty('max', 7);
-  await expect(card.locator('.among')).toHaveText('4 with skills, among them');
-  // Uppercase, as in the mockup: only the look.
-  await expect(card.locator('.among')).toHaveCSS('text-transform', 'uppercase');
   const rows = card.locator('#org-result button');
-  await expect(rows).toHaveText(['mps4 skills', 'kotlin3 skills', 'ai-tools2 skills', '+1 more']);
-  await expect(page.locator('.warning')).toHaveText([/^warning: JetBrains\/moved: Not found on GitHub/]);
-  await expect(page.getByRole('navigation', { name: 'Skills' })).toBeHidden();
+  await step('github.com/JetBrains scanned', async () => {
+    await field(page).fill('github.com/JetBrains');
+    await scanButton(page).click();
 
-  await card.getByRole('button', { name: '+1 more' }).click();
-  await expect(rows).toHaveText(['mps4 skills', 'kotlin3 skills', 'ai-tools2 skills', 'example1 skill']);
+    await expect(card.getByRole('heading')).toHaveText('Scan the organization');
+    await expect(card.locator('.org')).toHaveText('github.com/JetBrains7 repositories');
+    await expect(card.getByRole('progressbar')).toHaveJSProperty('value', 7);
+    await expect(card.getByRole('progressbar')).toHaveJSProperty('max', 7);
+    await expect(card.locator('.among')).toHaveText('4 with skills, among them');
+    // Uppercase, as in the mockup: only the look.
+    await expect(card.locator('.among')).toHaveCSS('text-transform', 'uppercase');
+    await expect(rows).toHaveText(['mps4 skills', 'kotlin3 skills', 'ai-tools2 skills', '+1 more']);
+    await expect(page.locator('.warning')).toHaveText([/^warning: JetBrains\/moved: Not found on GitHub/]);
+    await expect(page.getByRole('navigation', { name: 'Skills' })).toBeHidden();
+  });
+
+  await step('+1 more: every repository', async () => {
+    await card.getByRole('button', { name: '+1 more' }).click();
+    await expect(rows).toHaveText(['mps4 skills', 'kotlin3 skills', 'ai-tools2 skills', 'example1 skill']);
+  });
 });
 
-test('while an organization scans: Scanning…, its name and a progress bar, then a repository from it is scanned on a click', async ({ page }) => {
+test('while an organization scans: Scanning…, its name and a progress bar, then a repository from it is scanned on a click', async ({ page, step }) => {
   let answer!: () => void;
   const answered = new Promise<void>((resolve) => (answer = resolve));
   await page.route('**/api/organization?*', async (route) => {
     await answered;
     await route.continue();
   });
-  await field(page).fill('https://github.com/JetBrains/');
-  await scanButton(page).click();
-  await expect(page.getByRole('button', { name: 'Scanning…' })).toBeDisabled();
-  await expect(organization(page).locator('#org-id')).toHaveText('github.com/JetBrains');
-  await expect(organization(page).getByRole('progressbar')).toBeVisible();
-  answer();
-  await expect(scanButton(page)).toBeEnabled();
+  await step('scanning the organization', async () => {
+    await field(page).fill('https://github.com/JetBrains/');
+    await scanButton(page).click();
+    await expect(page.getByRole('button', { name: 'Scanning…' })).toBeDisabled();
+    await expect(organization(page).locator('#org-id')).toHaveText('github.com/JetBrains');
+    await expect(organization(page).getByRole('progressbar')).toBeVisible();
+  });
 
-  await page.getByRole('button', { name: '+1 more' }).click();
-  await page.getByRole('button', { name: /^example/ }).click();
-  await expect(field(page)).toHaveValue('JetBrains/example');
-  await expect(organization(page)).toBeHidden();
-  await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
-  await expect(page.locator('nav .name')).toHaveText(['commits']);
-  await expect(page.getByRole('searchbox', { name: 'Filter the skills' })).toBeVisible();
+  await step('the organization scanned', async () => {
+    answer();
+    await expect(scanButton(page)).toBeEnabled();
+    await page.getByRole('button', { name: '+1 more' }).click();
+    await expect(page.getByRole('button', { name: /^example/ })).toBeVisible();
+  });
+
+  await step('a repository from it scanned', async () => {
+    await page.getByRole('button', { name: /^example/ }).click();
+    await expect(field(page)).toHaveValue('JetBrains/example');
+    await expect(organization(page)).toBeHidden();
+    await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
+    await expect(page.locator('nav .name')).toHaveText(['commits']);
+    await expect(page.getByRole('searchbox', { name: 'Filter the skills' })).toBeVisible();
+  });
 });
 
-test('an organization GitHub cannot answer: the message, no organization; a repository scans again', async ({ page }) => {
-  await field(page).fill('github.com/not-answered');
-  await scanButton(page).click();
-  await expect(page.locator('.error')).toHaveText('Cannot reach GitHub: not recorded: https://api.github.com/users/not-answered');
-  await expect(organization(page)).toBeHidden();
-  await expect(skills(page)).toHaveCount(0);
+test('an organization GitHub cannot answer: the message, no organization; a repository scans again', async ({ page, step }) => {
+  await step('the message', async () => {
+    await field(page).fill('github.com/not-answered');
+    await scanButton(page).click();
+    await expect(page.locator('.error')).toHaveText('Cannot reach GitHub: not recorded: https://api.github.com/users/not-answered');
+    await expect(organization(page)).toBeHidden();
+    await expect(skills(page)).toHaveCount(0);
+  });
 
-  await field(page).fill(FIXTURE);
-  await scanButton(page).click();
-  await expect(page.locator('.error')).toHaveCount(0);
-  await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  await step('a repository scans again', async () => {
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await expect(page.locator('.error')).toHaveCount(0);
+    await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  });
 });
 
-test('3 or fewer with skills: all of them, no +K more; none: No repositories with skills', async ({ page }) => {
+test('3 or fewer with skills: all of them, no +K more; none: No repositories with skills', async ({ page, step }) => {
   const answers: Record<string, unknown[]> = {
     Few: [{ name: 'a', skills: 1 }, { name: 'b', skills: 5 }].map(({ name, skills }) => ({ id: `Few/${name}`, name, url: `https://github.com/Few/${name}`, skills })),
     None: [],
@@ -249,13 +318,17 @@ test('3 or fewer with skills: all of them, no +K more; none: No repositories wit
   });
   const card = organization(page);
 
-  await field(page).fill('github.com/Few');
-  await scanButton(page).click();
-  await expect(card.locator('.among')).toHaveText('2 with skills');
-  await expect(card.locator('#org-result button')).toHaveText(['a1 skill', 'b5 skills']);
+  await step('2 with skills: both', async () => {
+    await field(page).fill('github.com/Few');
+    await scanButton(page).click();
+    await expect(card.locator('.among')).toHaveText('2 with skills');
+    await expect(card.locator('#org-result button')).toHaveText(['a1 skill', 'b5 skills']);
+  });
 
-  await field(page).fill('github.com/None');
-  await scanButton(page).click();
-  await expect(card.locator('.among')).toHaveText('No repositories with skills');
-  await expect(card.locator('#org-result button')).toHaveCount(0);
+  await step('none: No repositories with skills', async () => {
+    await field(page).fill('github.com/None');
+    await scanButton(page).click();
+    await expect(card.locator('.among')).toHaveText('No repositories with skills');
+    await expect(card.locator('#org-result button')).toHaveCount(0);
+  });
 });

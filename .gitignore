@@ -5,6 +5,9 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+# npm run e2e: a screenshot at each step; CI's comparison of them (spec/screenshots.md)
+screenshots/
+comparison/
 # npm run demo
 demo-results/
 demo-videos/

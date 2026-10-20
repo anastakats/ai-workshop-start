@@ -13,6 +13,7 @@
   "scripts": {
     "test": "node --test tests/*.test.ts",
     "e2e": "playwright test",
+    "screenshots:compare": "node scripts/compare-screenshots.ts",
     "demo": "playwright test -c playwright.demo.config.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p demo"
   },
@@ -22,6 +23,9 @@
   "devDependencies": {
     "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.0",
+    "@types/pngjs": "^6.0.5",
+    "pixelmatch": "^8.0.0",
+    "pngjs": "^7.0.0",
     "typescript": "^7.0.2"
   }
 }
