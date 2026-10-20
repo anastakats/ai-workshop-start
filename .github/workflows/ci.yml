@@ -21,7 +21,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # With a token, the tests also scan intellij-community on live GitHub. A personal one:
+      # code search often answers 429 to the Actions token. Without the secret, that test is skipped.
       - run: npm test
+        env:
+          GITHUB_TOKEN: ${{ secrets.ATLAS_GITHUB_TOKEN }}
       # The real CLI on the fixture repository, as a user would run it: it must exit 0.
       - name: Smoke test
         run: |
