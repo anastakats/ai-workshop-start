@@ -143,7 +143,9 @@ test('intellij-community is scanned through the GitHub API in under 5 s', { skip
   const scanned = spawnSync(process.execPath, [CLI, 'scan', 'https://github.com/JetBrains/intellij-community'], { encoding: 'utf8' });
   const seconds = (performance.now() - started) / 1000;
   assert.equal(scanned.status, 0, scanned.stderr);
-  assert.match(scanned.stdout, /^JetBrains\/intellij-community · \d+ skills\n/);
+  assert.match(scanned.stdout, /^JetBrains\/intellij-community · \d+ skills · last updated \d{4}-\d{2}-\d{2}\n/);
+  // Every skill dated: one more request each, and still in time.
+  assert.doesNotMatch(scanned.stderr, /the last update of/);
   assert.ok(seconds < 5, `took ${seconds.toFixed(1)} s`);
 });
 
