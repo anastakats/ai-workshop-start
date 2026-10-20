@@ -22,5 +22,5 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests; `n
 web view in a browser (once: `npx playwright install chromium`; or `CHROMIUM_PATH=<chromium>`).
 `npm run demo` records a video of a feature, to show it working in its pull request: [demo/](demo/README.md).
 
-- [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.
+- [spec/](spec/): what it does; after the tests and the demos, `git status` is clean ([spec/workspace.md](spec/workspace.md)). [AGENTS.md](AGENTS.md): the definition of done.
 - [fixture/](fixture/README.md): a small repository for the tests.
