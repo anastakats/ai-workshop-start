@@ -43,7 +43,7 @@ test('ignored: node_modules/, Playwright\'s output, the demos\', *.tsbuildinfo, 
 
 test('never ignored: the code, the specs, the fixture, the demos\' scripts', () => {
   const tracked = execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
-  const paths = [...tracked, 'demo/feature.demo.ts', 'spec/feature.md', 'tests/feature.test.ts', 'src/core/feature.ts'];
+  const paths = [...tracked, 'demo/feature.demo.ts', 'spec/feature.md', 'tests/feature.test.ts', 'src/core/feature.ts', 'fixture/.claude/skills/feature/SKILL.md'];
   assert.deepEqual(ignored(paths), []);
 });
 
