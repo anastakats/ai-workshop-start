@@ -1,6 +1,8 @@
 node_modules/
 test-results/
 playwright-report/
+demo-results/
+demo-videos/
 /.idea/.gitignore
 /.idea/ai-workshop-start.iml
 /.idea/misc.xml
