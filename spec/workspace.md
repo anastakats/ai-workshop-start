@@ -7,4 +7,4 @@
 - The editor's settings, *all of them*: `.idea/`, `.vscode/`, `.fleet/`, `*.swp`; the OS's: `.DS_Store`, `Thumbs.db`
 - The code, the specs, the fixture, the demos' scripts: *never ignored*
 ## Tests
-`tests/workspace.test.ts`: `git check-ignore` on each of these, and on every tracked file; the other tests and `./skill-atlas scan ./fixture` leave `git status` as it was.
+None: `.gitignore` is not tested.
