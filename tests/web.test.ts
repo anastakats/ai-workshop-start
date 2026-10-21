@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -184,6 +185,53 @@ test("errors: the CLI's message as 400 { error }", async () => {
 
 test('local only: listens on 127.0.0.1', () => {
   assert.equal((server.address() as AddressInfo).address, '127.0.0.1');
+});
+
+/** A request as a browser sends it after a DNS rebinding: to 127.0.0.1, with another `Host`. */
+function withHost(host: string | undefined, path: string, method = 'GET', body?: string) {
+  const { port } = server.address() as AddressInfo;
+  return new Promise<{ status: number; text: string }>((resolve, reject) => {
+    const headers: Record<string, string> = body === undefined ? {} : { 'Content-Type': 'application/json' };
+    const request = httpRequest({ host: '127.0.0.1', port, path, method, headers, setHost: false }, (response) => {
+      let text = '';
+      response.setEncoding('utf8').on('data', (chunk) => (text += chunk));
+      response.on('end', () => resolve({ status: response.statusCode ?? 0, text }));
+    });
+    if (host !== undefined) request.setHeader('Host', host);
+    request.once('error', reject).end(body);
+  });
+}
+
+test('local only: the page and the API for Host: localhost:<port> or 127.0.0.1:<port>', async () => {
+  const { port } = server.address() as AddressInfo;
+  for (const host of [`localhost:${port}`, `127.0.0.1:${port}`, `LocalHost:${port}`]) {
+    assert.equal((await withHost(host, '/')).status, 200, host);
+    const scan = await withHost(host, `/api/scan?repo=${encodeURIComponent(FIXTURE)}`);
+    assert.equal(scan.status, 200, host);
+    assert.equal(JSON.parse(scan.text).skills.length, 6);
+  }
+});
+
+test('local only: another Host, as after a DNS rebinding, refused with 403, for the page and every API', async () => {
+  const { port } = server.address() as AddressInfo;
+  const hosts = [`attacker.example:${port}`, 'attacker.example', `localhost:${port + 1}`, 'localhost', `127.0.0.1:${port}.attacker.example`, `localhost.attacker.example:${port}`, ''];
+  const requests: [string, string?, string?][] = [
+    ['/'],
+    ['/markdown.js'],
+    [`/api/scan?repo=${encodeURIComponent(FIXTURE)}`],
+    ['/api/organization?org=github.com/JetBrains'],
+    ['/api/cluster', 'POST', JSON.stringify({ skills: [] })],
+    ['/nothing-here'],
+  ];
+  for (const host of hosts) {
+    for (const [path, method, body] of requests) {
+      const answer = await withHost(host, path, method, body);
+      assert.equal(answer.status, 403, `${host} ${path}`);
+      assert.deepEqual(JSON.parse(answer.text), { error: `Not allowed: Host ${host || '(none)'}` });
+    }
+  }
+  // No Host at all: Node refuses it before the server reads it.
+  assert.deepEqual(await withHost(undefined, `/api/scan?repo=${encodeURIComponent(FIXTURE)}`), { status: 400, text: '' });
 });
 
 test('./skill-atlas serve: prints its URL, serves the page and the scan, stores nothing', async (t) => {
