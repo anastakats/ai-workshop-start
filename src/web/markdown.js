@@ -5,17 +5,19 @@ import { Marked } from 'marked';
 
 /**
  * The Markdown as HTML. Raw HTML in it is shown as text; links open in a new tab, but `#section`; relative links
- * and images resolved against `link`, where the SKILL.md is: on GitHub, at the scanned commit.
+ * and images resolved against `link`, where the SKILL.md is: on GitHub, at the scanned commit; `/docs/x.md` from the
+ * repository's root, `path` up from the SKILL.md.
  * @param {string} markdown
  * @param {string} link
+ * @param {string} path the SKILL.md's, in its repository
  * @returns {string}
  */
-export function renderMarkdown(markdown, link) {
+export function renderMarkdown(markdown, link, path) {
   const marked = new Marked({
     gfm: true,
     walkTokens(token) {
-      if (token.type === 'link') token.href = resolve(token.href, link);
-      if (token.type === 'image') token.href = resolve(token.href, raw(link));
+      if (token.type === 'link') token.href = resolve(token.href, link, path);
+      if (token.type === 'image') token.href = resolve(token.href, raw(link), path);
     },
     renderer: {
       html({ text, block }) {
@@ -32,13 +34,16 @@ export function renderMarkdown(markdown, link) {
 }
 
 /**
- * `references/x.md` → next to the SKILL.md; with a scheme, or `#section`, as it is.
+ * `references/x.md` → next to the SKILL.md; `/docs/x.md` → from the repository's root, as on GitHub; with a scheme,
+ * or `#section`, as it is.
  * @param {string} href
  * @param {string} base
+ * @param {string} path
  */
-function resolve(href, base) {
+function resolve(href, base, path) {
   if (!href || href.startsWith('#') || /^[a-z][a-z\d+.-]*:/i.test(href)) return href;
   try {
+    if (/^\/(?!\/)/.test(href)) return new URL(href.slice(1), new URL('../'.repeat(path.split('/').length - 1) || './', base)).href;
     return new URL(href, base).href;
   } catch {
     return href;

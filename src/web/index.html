@@ -378,7 +378,7 @@
     history.replaceState(null, '', address(scannedInput(), skill.name));
     for (const other of $('skills').children) other.setAttribute('aria-current', String(other === item));
     const markdown = element('div', { className: 'markdown' });
-    markdown.innerHTML = renderMarkdown(skill.body, skill.link);
+    markdown.innerHTML = renderMarkdown(skill.body, skill.link, skill.path);
     $('skill').replaceChildren(
       element('h2', { className: 'title', textContent: skill.name }),
       element('p', { className: 'link' },

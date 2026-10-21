@@ -36,7 +36,7 @@ test('the page: the title, the field, Scan, and the placeholder for SKILL.md', a
   assert.match(page.text, /Select a skill to read its SKILL\.md\./);
   // Only the SKILL.md's Markdown goes in as HTML, rendered; every other text as text.
   assert.equal(page.text.match(/innerHTML/g)?.length, 1);
-  assert.match(page.text, /\.innerHTML = renderMarkdown\(skill\.body, skill\.link\)/);
+  assert.match(page.text, /\.innerHTML = renderMarkdown\(skill\.body, skill\.link, skill\.path\)/);
 });
 
 test('the Markdown: its script, and marked, which renders it, served as JavaScript; the page imports them', async () => {

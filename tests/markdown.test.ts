@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { renderMarkdown } from '../src/web/markdown.js';
 
 const LINK = 'https://github.com/JetBrains/example/blob/5ab6270/.claude/skills/commits/SKILL.md';
-const render = (markdown: string, link = LINK) => renderMarkdown(markdown, link).trim();
+const render = (markdown: string, link = LINK, path = '.claude/skills/commits/SKILL.md') => renderMarkdown(markdown, link, path).trim();
 
 test("GitHub's Markdown: headings, lists, code, tables, quotes", () => {
   assert.equal(render('# Commits\n\nStart with the **area**, then `what`.'), '<h1>Commits</h1>\n<p>Start with the <strong>area</strong>, then <code>what</code>.</p>');
@@ -28,14 +28,20 @@ test('links: in a new tab; relative ones next to the SKILL.md, at the scanned co
   assert.equal(render('[up](../shared/a.md "Shared")'), `<p><a href="https://github.com/JetBrains/example/blob/5ab6270/.claude/skills/shared/a.md" title="Shared" target="_blank" rel="noopener">up</a></p>`);
   assert.equal(render('[site](https://example.com/a)'), '<p><a href="https://example.com/a" target="_blank" rel="noopener">site</a></p>');
   assert.equal(render('[mail](mailto:a@b.c)'), '<p><a href="mailto:a@b.c" target="_blank" rel="noopener">mail</a></p>');
+  // From the repository's root, as on GitHub: at the scanned commit too.
+  assert.equal(render('[docs](/docs/a.md)'), '<p><a href="https://github.com/JetBrains/example/blob/5ab6270/docs/a.md" target="_blank" rel="noopener">docs</a></p>');
+  assert.equal(render('[docs](/docs/a.md)', 'https://github.com/JetBrains/example/blob/5ab6270/SKILL.md', 'SKILL.md'), '<p><a href="https://github.com/JetBrains/example/blob/5ab6270/docs/a.md" target="_blank" rel="noopener">docs</a></p>');
+  assert.equal(render('[site](//example.com/a)'), '<p><a href="https://example.com/a" target="_blank" rel="noopener">site</a></p>');
   // Within the page: as it is, in the same tab.
   assert.equal(render('[below](#usage)'), '<p><a href="#usage">below</a></p>');
   // A local directory: next to the file.
   assert.equal(render('[a](a.md)', 'file:///repo/.claude/skills/x/SKILL.md'), '<p><a href="file:///repo/.claude/skills/x/a.md" target="_blank" rel="noopener">a</a></p>');
+  assert.equal(render('[docs](/docs/a.md)', 'file:///repo/.claude/skills/x/SKILL.md'), '<p><a href="file:///repo/docs/a.md" target="_blank" rel="noopener">docs</a></p>');
 });
 
 test('images: relative ones, the file itself on GitHub, raw/, not its page', () => {
   assert.equal(render('![flow](images/flow.png)'), '<p><img src="https://github.com/JetBrains/example/raw/5ab6270/.claude/skills/commits/images/flow.png" alt="flow"></p>');
   assert.equal(render('![x](https://example.com/x.png)'), '<p><img src="https://example.com/x.png" alt="x"></p>');
-  assert.equal(render('![x](x.png)', 'file:///repo/s/SKILL.md'), '<p><img src="file:///repo/s/x.png" alt="x"></p>');
+  assert.equal(render('![x](x.png)', 'file:///repo/s/SKILL.md', 's/SKILL.md'), '<p><img src="file:///repo/s/x.png" alt="x"></p>');
+  assert.equal(render('![logo](/images/logo.png)'), '<p><img src="https://github.com/JetBrains/example/raw/5ab6270/images/logo.png" alt="logo"></p>');
 });

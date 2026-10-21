@@ -32,7 +32,7 @@ The selected skill's `SKILL.md`, as GitHub would show it: its front matter, then
 - Front matter YAML cannot read as a mapping: its text, *as it is*, instead of the table
 - **Markdown**: the body after the front matter, GitHub's flavor ([marked](https://marked.js.org)): headings, lists, code, tables, quotes, links, images
 - Raw HTML in it: shown as *text*, not HTML
-- Links: in a new tab, but `#section`; relative links and images next to the `SKILL.md`: on GitHub at the scanned commit, an image `raw/`
+- Links: in a new tab, but `#section`; relative links and images next to the `SKILL.md`, `/…` from the repository's root: on GitHub at the scanned commit, an image `raw/`
 - `frontMatter` in `/api/scan`: `[key, value]` pairs, the YAML as text, or `null`; `body`: the Markdown after it
 ## Copy link
 - **Copy link**, next to the selected skill's link: the link on the clipboard
