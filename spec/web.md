@@ -5,15 +5,30 @@ The target interface: scan a repository, then the skills on the left and the sel
 - **Header**: `Skill Atlas`, a field `owner/repo or a GitHub link` (or a local directory), **Scan**; after a scan, `owner/repo` and `N skills`, then `last updated <day>`, the latest of the skills' ([Last updated](analysis.md#last-updated)); none known, not shown
 - **Left**: every skill, sorted by **name**; under the name, the description on *one line*, cut with `…`
 - **Filter**: a field `Filter the skills` over them, after a scan; see [Filter the skills](#filter-the-skills)
-- **Right**: the selected skill's `SKILL.md`, *as it is*, with its link, `also in` and `updated <day>`; before a selection, `Select a skill to read its SKILL.md.`
+- **Before a scan**: on the left, `Scan a repository to see its skills. Try:` and examples; see [Start](#start)
+- **Right**: the selected skill's `SKILL.md`, *as it is*, with its link, **Copy link**, `also in` and `updated <day>`; before a selection, `Select a skill to read its SKILL.md.`; see [Copy link](#copy-link)
+- **URL**: what is scanned and the selected skill; see [The URL](#the-url)
 - While it scans, the button is `Scanning…`, disabled
 - Errors: the CLI's message, in the page, and no skills; warnings under the header
 ## Server
 - Local only: listens on `127.0.0.1`; `GITHUB_TOKEN` stays on the server
-- `GET /` the page, `GET /filter.js` its filter; `GET /api/scan?repo=<input>` → `{ repository, skills, warnings }`, each skill with its `link`, `content` and `updated`
+- `GET /` the page, with any query too, `GET /filter.js` its filter; `GET /api/scan?repo=<input>` → `{ repository, skills, warnings }`, each skill with its `link`, `content` and `updated`
 - A clear message → `400 { error }`; *nothing is stored*
 ## Tests
 The base scenarios end to end, in Chromium: `npm run e2e` (e2e/), with GitHub answered from a recording; `./fixture`'s dates fixed, not this checkout's commits
+## Start
+- Before a scan, the examples: `JetBrains/kotlin` (a repository), `github.com/JetBrains` (an organization), then `or the path to a local directory.`
+- An example, clicked: typed in the field and scanned
+- Hidden once scanned, an organization too; after an error, shown again
+## The URL
+- `?repo=<input>`, once scanned, as typed, its `/` and `:` as they are; `&skill=<name>` once a skill is selected
+- Opened, reloaded or shared: the input in the field, scanned; then the skill selected; one the repository does not have, none, dropped from the URL
+- Another input scanned: a new entry in the history; the same one again, or a selection: the same entry, the skill dropped by a new scan
+- Back and Forward: the entry's scan again, its skill selected; the first entry, the empty page
+- A scan still answering when another starts, after Back for example, or after Back to the empty page: it changes nothing
+## Copy link
+- **Copy link**, next to the selected skill's link: the link on the clipboard
+- Then `Copied`, for 2 seconds; the clipboard refused: `Cannot copy`, as long
 ## Filter the skills
 ![Filter the skills: "test", 5 of 41](web-filter.png)
 - A field over the skills: `N of M` match, by name or description, case-insensitive; empty, every skill and no count

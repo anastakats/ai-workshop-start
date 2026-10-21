@@ -38,6 +38,21 @@ test('the page: the title, the field, Scan, and the placeholder for SKILL.md', a
   assert.doesNotMatch(page.text, /innerHTML/);
 });
 
+test('before a scan, the examples: a repository and an organization, each a button with what it scans', async () => {
+  const page = await get('/');
+  assert.match(page.text, /Scan a repository to see its skills\. Try:/);
+  assert.match(page.text, /<button type="button" class="example" data-repo="JetBrains\/kotlin">JetBrains\/kotlin<\/button>a repository/);
+  assert.match(page.text, /<button type="button" class="example" data-repo="github\.com\/JetBrains">github\.com\/JetBrains<\/button>an organization/);
+  assert.match(page.text, /or the path to a local directory\./);
+});
+
+test('a shared link, /?repo=<input>&skill=<name>: the same page, the scan left to it', async () => {
+  const shared = await get('/?repo=JetBrains/example&skill=commits');
+  assert.equal(shared.status, 200);
+  assert.equal(shared.type, 'text/html; charset=utf-8');
+  assert.equal(shared.text, (await get('/')).text);
+});
+
 test('the filter: a field over the skills, and its script, served as JavaScript', async () => {
   const page = await get('/');
   assert.match(page.text, /<input id="query"[^>]* placeholder="Filter the skills"/);
