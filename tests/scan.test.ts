@@ -137,6 +137,13 @@ test('rate limit → a message that asks for GITHUB_TOKEN', async () => {
   });
 });
 
+test('a token GitHub rejects → a message that says where the token comes from', async () => {
+  const rejected = replay({ 'https://api.github.com/repos/JetBrains/MPS': { status: 401, body: { message: 'Bad credentials' } } });
+  await assert.rejects(openGitHub('https://github.com/JetBrains/MPS', { fetch: rejected, token: 'expired' }), {
+    message: 'GitHub rejected the token; check GITHUB_TOKEN, or gh auth status',
+  });
+});
+
 // Live GitHub, so only with GITHUB_TOKEN: without one, the rate limit allows a scan or two an hour.
 test('intellij-community is scanned through the GitHub API in under 5 s', { skip: !process.env.GITHUB_TOKEN && 'needs GITHUB_TOKEN' }, () => {
   const started = performance.now();

@@ -42,7 +42,7 @@ The base scenarios end to end, in Chromium: `npm run e2e` (e2e/), with GitHub an
 - A card `Scan the organization`: `github.com/<org>` and the number of repositories; a progress bar while it scans, one repository at a time
 - Then `N with skills, among them`: a few (3) repositories, the most skills first, with their `N skills`, and `+K more`, which shows the rest; with 3 or fewer, `N with skills`; with none, `No repositories with skills`
 - A repository in the list: a click scans it, as `owner/repo`
-- Every repository, private ones too if `GITHUB_TOKEN` sees them; its skills *counted*, from its tree at the default branch, not read
+- Every repository, private ones too if the token ([the token](cli.md)) sees them; its skills *counted*, from its tree at the default branch, not read
 - An empty repository: no skills; a repository GitHub cannot list: a *warning*, the scan goes on; the rate limit or no GitHub at all: the message, the scan stops
 - Without `GITHUB_TOKEN` or `gh auth login` ([the token](cli.md)), GitHub's rate limit allows about 60 repositories an hour
 ### Server

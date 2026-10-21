@@ -18,7 +18,7 @@ function path(t: { after(fn: () => void): void }, script?: string): string {
   return bin;
 }
 
-const loggedIn = '[ "$*" = "auth token" ] && echo gho_from-gh';
+const loggedIn = '[ "$*" = "auth token --hostname github.com" ] && echo gho_from-gh';
 
 test('GITHUB_TOKEN, when set, wins over gh', (t) => {
   assert.equal(githubToken({ PATH: path(t, loggedIn), GITHUB_TOKEN: 'from-env' }), 'from-env');
@@ -27,6 +27,11 @@ test('GITHUB_TOKEN, when set, wins over gh', (t) => {
 test("without GITHUB_TOKEN, gh's token: gh auth token", (t) => {
   assert.equal(githubToken({ PATH: path(t, loggedIn) }), 'gho_from-gh');
   assert.equal(githubToken({ PATH: path(t, loggedIn), GITHUB_TOKEN: '' }), 'gho_from-gh');
+});
+
+test("gh's token for github.com, even with GH_HOST set to another host", (t) => {
+  const byHost = 'case "$*" in *"--hostname github.com"*) echo gho_from-gh ;; *) echo ghe_enterprise ;; esac';
+  assert.equal(githubToken({ PATH: path(t, byHost), GH_HOST: 'github.example.com' }), 'gho_from-gh');
 });
 
 test('no gh, gh not logged in, or nothing printed → no token', (t) => {
