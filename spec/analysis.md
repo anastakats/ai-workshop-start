@@ -17,6 +17,7 @@ Skill: id = `repo:path`, name, description, commit, updated
   - GitHub code search lists a file not in the scanned commit → its index lags behind the default branch, the file was probably moved or deleted
   - In the tree, but GitHub answers 404 for it → the commit and the 404
   - A local file deleted since the directory was listed, or unreadable → that, with the error
+- A local directory: only its skill roots are read, nothing else, readable or not; a folder in them that cannot be read → a *warning* with the folder and the error, the scan goes on; only the directory itself unreadable → the error
 - Unreachable repository → a clear message, exit code 1
 ## Last updated
 - A skill is updated when its *directory* changes, any file in it: the date of the *last commit* that changed it, up to the scanned commit
