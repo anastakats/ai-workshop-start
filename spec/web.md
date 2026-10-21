@@ -5,6 +5,7 @@ The target interface: scan a repository, then the skills on the left and the sel
 - **Header**: `Skill Atlas`, a field `owner/repo or a GitHub link` (or a local directory), **Scan**; after a scan, `owner/repo` and `N skills`; *not* the repository's last update
 - **Left**: every skill, sorted by **name**; under the name, the description on *one line*, cut with `…`, then `updated <day>`, *the skill's own* ([Last updated](analysis.md#last-updated)); unknown, not shown
 - **Filter**: a field `Filter the skills` over them, after a scan; see [Filter the skills](#filter-the-skills)
+- **Cluster**: under the filter, the path `All skills › …` and **Cluster**, after a scan of 3 or more skills; see [Clustering](cluster.md#web)
 - **Before a scan**: on the left, `Scan a repository to see its skills. Try:` and examples; see [Start](#start)
 - **Right**: the selected skill's `SKILL.md`, *rendered*, with its link, **Copy link**, `also in` and `updated <day>`; before a selection, `Select a skill to read its SKILL.md.`; see [Preview](#preview), [Copy link](#copy-link)
 - **URL**: what is scanned and the selected skill; see [The URL](#the-url)
@@ -13,6 +14,7 @@ The target interface: scan a repository, then the skills on the left and the sel
 ## Server
 - Local only: listens on `127.0.0.1`; the token, `GITHUB_TOKEN` or gh's ([the token](cli.md)), stays on the server
 - `GET /` the page, with any query too, `GET /filter.js` its filter, `GET /markdown.js` and `GET /marked.js` its Markdown; `GET /api/scan?repo=<input>` → `{ repository, skills, warnings }`, each skill with its `link`, `content`, `updated`, `frontMatter` and `body` ([Preview](#preview))
+- `POST /api/cluster`: one level of groups, by the model; see [Clustering](cluster.md#server)
 - A clear message → `400 { error }`; *nothing is stored*
 ## Tests
 The base scenarios end to end, in Chromium: `npm run e2e` (e2e/), with GitHub answered from a recording; `./fixture`'s dates fixed, not this checkout's commits

@@ -10,7 +10,7 @@ test('web view', async ({ page }) => {
   // Relative to the checkout, where the server runs: the same on every machine, unlike FIXTURE.
   await type(page.getByRole('textbox', { name: 'Repository' }), './fixture');
   await page.getByRole('button', { name: 'Scan' }).click();
-  const skills = page.getByRole('navigation', { name: 'Skills' }).getByRole('button');
+  const skills = page.getByRole('navigation', { name: 'Skills' }).locator('#skills').getByRole('button');
   await expect(skills).toHaveCount(6);
   await caption(page, 'Its skills, sorted by name; the warnings under the header');
 

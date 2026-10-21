@@ -1,8 +1,9 @@
 // The web view: one page, and the scan behind it as JSON. Local only, nothing stored; the
 // GitHub token, if any, stays here.
 import { readFile } from 'node:fs/promises';
-import { createServer, type Server, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { parse, stringify } from 'yaml';
+import { clusterSkills, type Ask, type Clustered } from './core/cluster.ts';
 import { AtlasError } from './core/errors.ts';
 import { skillLink } from './core/model.ts';
 import type { OrganizationOptions, OrganizationResult } from './core/organization.ts';
@@ -22,11 +23,17 @@ export type WebContext = {
   open(input: string): Promise<Source>;
   /** Scans every repository of a GitHub organization. */
   organization(input: string, options: Pick<OrganizationOptions, 'progress' | 'signal'>): Promise<OrganizationResult>;
+  /** The model the skills are clustered by; without one, `POST /api/cluster` answers that. */
+  cluster?: Ask;
 };
+
+/** The largest `POST /api/cluster` body: thousands of skills' names and descriptions. */
+const MAX_BODY = 4 * 1024 * 1024;
 
 /**
  * `GET /`, the page, and its scripts: `GET /filter.js`, `/markdown.js`, `/marked.js`; `GET /api/scan?repo=<input>`,
- * `{ repository, skills, warnings }`, each skill with its `link`, `frontMatter` and `body`, or `400 { error }`; `GET /api/organization?org=<input>`, see `scanOrganization` below.
+ * `{ repository, skills, warnings }`, each skill with its `link`, `frontMatter` and `body`, or `400 { error }`; `GET /api/organization?org=<input>`, see `scanOrganization` below;
+ * `POST /api/cluster`, see `cluster` below.
  */
 export function createWebServer(context: WebContext): Server {
   return createServer(async (request, response) => {
@@ -36,6 +43,7 @@ export function createWebServer(context: WebContext): Server {
     };
     const json = (status: number, body: unknown) => send(status, 'application/json', JSON.stringify(body));
     const url = new URL(request.url ?? '/', 'http://localhost');
+    if (url.pathname === '/api/cluster') return request.method === 'POST' ? cluster(request, response, json) : json(405, { error: `Not allowed: ${request.method}` });
     if (request.method !== 'GET') return json(405, { error: `Not allowed: ${request.method}` });
     if (url.pathname === '/') return send(200, 'text/html', await readFile(PAGE, 'utf8'));
     if (url.pathname in SCRIPTS) return send(200, 'text/javascript', await readFile(SCRIPTS[url.pathname], 'utf8'));
@@ -52,6 +60,28 @@ export function createWebServer(context: WebContext): Server {
       else json(500, { error: `Unexpected error: ${error instanceof Error ? error.message : String(error)}` });
     }
   });
+
+  /**
+   * `POST /api/cluster`, `{ skills: [{ id, name, description }] }`: one level, `{ groups: [{ title, skills }] }`,
+   * each group the ids of its skills; or `400 { error }`. Nothing is stored: the page sends the skills.
+   */
+  async function cluster(request: IncomingMessage, response: ServerResponse, json: (status: number, body: unknown) => void) {
+    const stopped = new AbortController();
+    response.once('close', () => stopped.abort()); // the page went away: the model is not waited for
+    // JSON only: another site's page cannot send it here without asking first, and the server never agrees.
+    if (!/^application\/json\b/i.test(request.headers['content-type'] ?? '')) return json(415, { error: 'Send JSON: Content-Type: application/json' });
+    try {
+      if (!context.cluster) throw new AtlasError('Clustering is not set up on this server');
+      const skills = clusteredSkills(await readBody(request));
+      json(200, { groups: await clusterSkills(skills, context.cluster, stopped.signal) });
+    } catch (error) {
+      if (response.destroyed) return;
+      // A body too large, not read to its end: the connection cannot be used again.
+      if (!request.complete) response.setHeader('Connection', 'close');
+      if (error instanceof AtlasError) json(400, { error: error.message });
+      else json(500, { error: `Unexpected error: ${error instanceof Error ? error.message : String(error)}` });
+    }
+  }
 
   /**
    * One JSON object a line, as the scan goes: `{ organization }` once the repositories are listed,
@@ -77,6 +107,34 @@ export function createWebServer(context: WebContext): Server {
       response.end();
     }
   }
+}
+
+/** The request's body as JSON, up to MAX_BODY. */
+async function readBody(request: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request as AsyncIterable<Buffer>) {
+    size += chunk.length;
+    if (size > MAX_BODY) throw new AtlasError('Too many skills to cluster at once');
+    chunks.push(chunk);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    throw new AtlasError('Send { skills: [{ id, name, description }] } as JSON');
+  }
+}
+
+/** `{ skills: [{ id, name, description }] }`, each id once; else a clear message. */
+function clusteredSkills(body: unknown): Clustered[] {
+  const skills = (body as { skills?: unknown } | null)?.skills;
+  const valid = (skill: unknown): skill is Clustered => {
+    const { id, name, description } = (skill ?? {}) as Record<string, unknown>;
+    return typeof id === 'string' && typeof name === 'string' && typeof description === 'string';
+  };
+  if (!Array.isArray(skills) || !skills.every(valid)) throw new AtlasError('Send { skills: [{ id, name, description }] } as JSON');
+  if (new Set(skills.map((skill) => skill.id)).size !== skills.length) throw new AtlasError('Each skill once: an id is repeated');
+  return skills.map(({ id, name, description }) => ({ id, name, description }));
 }
 
 /**

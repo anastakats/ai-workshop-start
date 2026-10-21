@@ -13,5 +13,7 @@ build-tools-bump-gradle-api — Bumps the Gradle API…
 - Sorted by **name**; the description's *first sentence*
 - `also in <paths>` for copies; warnings go to *stderr*
 - `updated <day>` under each skill, and `· last updated <day>`, the latest, in the first line; unknown, not printed ([Last updated](analysis.md#last-updated))
+## Cluster
+`./skill-atlas cluster <GitHub URL | owner/repo | directory>`: the skills in groups, by a model, down to fewer than 3 a group; see [Clustering](cluster.md#command-line)
 ## Web
 `./skill-atlas serve [--port N]`: the [web view](web.md) at `http://localhost:3000`, port 3000 by default

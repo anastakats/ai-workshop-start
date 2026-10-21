@@ -1,6 +1,7 @@
 // Runs the commands the way the CLI does, with GitHub answering from EXAMPLE below.
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { run } from '../src/commands.ts';
+import type { Ask } from '../src/core/cluster.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
 import { scanOrganization, type OrganizationOptions } from '../src/core/organization.ts';
 import { openInput } from '../src/local.ts';
@@ -117,6 +118,47 @@ const ORGANIZATION: Recording = {
 const github = replay({ ...EXAMPLE, ...ORGANIZATION });
 
 /**
+ * What the model answers for the skills of ./fixture, by the names it is asked about: two groups of 3,
+ * each clustered again; one answer in a code block, as a model may write it.
+ */
+export const FIXTURE_CLUSTERS: Record<string, string> = {
+  'code-style, commits, no-description, no-name, plain-notes, release-checklist': JSON.stringify({
+    groups: [
+      { title: 'Notes', skills: [3, 4, 5] },
+      { title: 'Code and releases', skills: [1, 2, 6] },
+    ],
+  }),
+  'code-style, commits, release-checklist': `\`\`\`json\n${JSON.stringify({
+    groups: [
+      { title: 'Code style', skills: [1] },
+      { title: 'Commits and releases', skills: [2, 3] },
+    ],
+  })}\n\`\`\``,
+  'no-description, no-name, plain-notes': JSON.stringify({
+    groups: [
+      { title: 'Incomplete front matter', skills: [1, 2] },
+      { title: 'No front matter', skills: [3] },
+    ],
+  }),
+};
+
+/** The names a cluster prompt asks about, `a, b, c`: the lines `N. name — description`. */
+export const promptNames = (prompt: string) =>
+  [...prompt.matchAll(/^\d+\. (\S+)/gm)].map((found) => found[1]).join(', ');
+
+/** A model that answers from a recording, by the names in the prompt; any other prompt fails, as replay does. */
+export function recordedModel(recording: Record<string, string> = FIXTURE_CLUSTERS): Ask & { asked: string[] } {
+  const asked: string[] = [];
+  const ask = async (prompt: string) => {
+    const names = promptNames(prompt);
+    asked.push(names);
+    if (!Object.hasOwn(recording, names)) throw new Error(`not recorded: ${names}`);
+    return recording[names];
+  };
+  return Object.assign(ask, { asked });
+}
+
+/**
  * What the user typed, opened as the CLI does, with GitHub answering from EXAMPLE through code
  * search; ./fixture with its dates from FIXTURE_UPDATED.
  */
@@ -130,14 +172,15 @@ export async function open(input: string) {
 export const organization = (input: string, options: Pick<OrganizationOptions, 'progress' | 'signal'> = {}) =>
   scanOrganization(input, { fetch: github, token: 'test', ...options });
 
-/** `skill-atlas <args>`, as the CLI runs it, with GitHub answering from EXAMPLE. */
-export async function atlas(args: string[]) {
+/** `skill-atlas <args>`, as the CLI runs it, with GitHub answering from EXAMPLE and the model from FIXTURE_CLUSTERS. */
+export async function atlas(args: string[], cluster: Ask = recordedModel()) {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const code = await run(args, {
     open,
     print: (text) => stdout.push(text),
     error: (text) => stderr.push(text),
+    cluster,
   });
   return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n') };
 }
