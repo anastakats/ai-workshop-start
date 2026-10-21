@@ -20,6 +20,10 @@ the selected `SKILL.md` on the right, rendered, its front matter a table. `githu
 repositories with skills, the most skills first. Before a scan, examples to click; the page's URL keeps the scan
 and the selected skill (`?repo=JetBrains/kotlin&skill=…`), to reload or share; **Copy link** copies a skill's link.
 
+`./skill-atlas cluster <repo>` puts the skills in groups, by a small model (Haiku, `claude -p` in a Docker container,
+the key from JetBrains Central), each group of 3 or more in smaller ones; in the web view, **Cluster**, one level a
+click: [spec/cluster.md](spec/cluster.md).
+
 Set `GITHUB_TOKEN`, or log in with `gh auth login`, for a higher GitHub rate limit: scanning
 `github.com/JetBrains` needs it. `npm test` runs the tests; `npm run e2e`, the
 web view in a browser (once: `npx playwright install chromium`; or `CHROMIUM_PATH=<chromium>`).

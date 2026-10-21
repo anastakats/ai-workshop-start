@@ -35,6 +35,18 @@
   #filter[hidden] { display: none; }
   #query { padding: 10px 104px 10px 16px; font: 16px var(--sans); }
   #skills { padding-bottom: 16px; }
+  #groups { display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 2px 24px 8px 40px; font-size: 14px; }
+  #groups[hidden] { display: none; }
+  #path { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; margin: 0; padding: 0; list-style: none; color: var(--muted); }
+  #path li + li::before { content: '›'; margin-right: 6px; }
+  #path button { display: inline; width: auto; padding: 0; background: none; color: var(--accent); font: inherit; }
+  #path button:hover { background: none; text-decoration: underline; }
+  #path [aria-current="page"] { color: var(--text); font-weight: 500; }
+  #cluster { flex: none; width: auto; padding: 4px 14px; border-radius: 6px; background: var(--chip); color: var(--text); font: 500 14px var(--sans); }
+  #cluster:hover { background: #e2e2df; }
+  #cluster[hidden] { display: none; }
+  nav .group .name::after { content: ' ›'; color: var(--muted); }
+  nav .group .count { color: #3a46a8; font-weight: 600; }
   #start { padding: 24px 40px; color: var(--muted); }
   #start[hidden] { display: none; }
   #start p { margin: 0; }
@@ -124,6 +136,10 @@
       <input id="query" type="search" placeholder="Filter the skills" aria-label="Filter the skills" autocomplete="off" spellcheck="false">
       <span id="matches"></span>
     </div>
+    <div id="groups" hidden>
+      <ol id="path" aria-label="Groups"></ol>
+      <button id="cluster" type="button" title="Group these skills by what they are for">Cluster</button>
+    </div>
     <div id="skills"></div>
     <div id="start">
       <p>Scan a repository to see its skills. Try:</p>
@@ -161,6 +177,13 @@
   // The scanned skills, and the one on the right, if any.
   let scanned = [];
   let selected = null;
+  // The skills in groups, by request: a node a group, its `groups` once clustered, its `parent`; `root`, every
+  // skill; `at`, the group on the left. Kept in the page only, until the next scan.
+  let root = null;
+  let at = null;
+  const node = (title, skills, parent) => ({ title, skills, parent, groups: null, clustering: false });
+  // A group with fewer skills is not clustered: SMALLEST in src/core/cluster.ts.
+  const SMALLEST = 3;
   // The latest scan's number: an earlier one still answering, as after Back, changes nothing.
   let scans = 0;
   const placeholder = () => $('skill').replaceChildren(element('p', { className: 'placeholder', textContent: 'Select a skill to read its SKILL.md.' }));
@@ -269,6 +292,8 @@
     $('repository').hidden = true;
     scanned = [];
     selected = null;
+    root = at = null;
+    $('groups').hidden = true;
     $('filter').hidden = true;
     $('query').value = '';
     $('skills').replaceChildren();
@@ -325,6 +350,8 @@
     $('repository').hidden = true;
     scanned = [];
     selected = null;
+    root = at = null;
+    $('groups').hidden = true;
     $('filter').hidden = true;
     $('query').value = '';
     $('skills').replaceChildren();
@@ -347,16 +374,24 @@
     placeholder();
     scanned = skills;
     selected = null;
+    root = at = node('All skills', skills, null);
     $('query').value = '';
     $('filter').hidden = false;
     list();
   }
 
-  // The skills that match the filter, the matches highlighted; `N of M` while it filters.
+  // The group on the left: its groups once clustered; else, or while it filters, its skills that match the
+  // filter, the matches highlighted, `N of M`.
   function list() {
+    if (!at) return;
+    showGroup();
     const query = $('query').value;
-    const matching = filterSkills(scanned, query);
-    $('matches').textContent = query.trim() ? `${matching.length} of ${scanned.length}` : '';
+    if (at.groups && !query.trim()) {
+      $('matches').textContent = '';
+      return $('skills').replaceChildren(...at.groups.map(groupItem));
+    }
+    const matching = filterSkills(at.skills, query);
+    $('matches').textContent = query.trim() ? `${matching.length} of ${at.skills.length}` : '';
     const parts = (all) => all.map(({ text, match }) => (match ? element('mark', { textContent: text }) : text));
     $('skills').replaceChildren(...matching.map(({ skill, shown }) => {
       const item = element('button', { type: 'button', title: skill.path },
@@ -369,6 +404,77 @@
       return item;
     }));
   }
+
+  // A group in the list: its title, how many skills and their names; a click goes into it.
+  function groupItem(group) {
+    const item = element('button', { type: 'button', className: 'group', title: `Open ${group.title}` },
+      element('span', { className: 'name', textContent: group.title }),
+      element('span', { className: 'description' },
+        element('span', { className: 'count', textContent: `${group.skills.length} ${group.skills.length === 1 ? 'skill' : 'skills'}` }),
+        ` · ${group.skills.map((skill) => skill.name).join(', ')}`));
+    item.addEventListener('click', () => openGroup(group));
+    return item;
+  }
+
+  function openGroup(group) {
+    at = group;
+    list();
+    $('skills').parentElement.scrollTop = 0;
+  }
+
+  // Over the list, after a scan of SMALLEST skills or more: where the group is, `All skills › A › B`, each
+  // group above it a click away; Cluster for a group of SMALLEST or more, Ungroup once clustered.
+  function showGroup() {
+    $('groups').hidden = root.skills.length < SMALLEST;
+    const path = [];
+    for (let group = at; group; group = group.parent) path.unshift(group);
+    $('path').replaceChildren(...path.map((group) => {
+      if (group === at) {
+        const current = element('li', { textContent: group.title });
+        current.setAttribute('aria-current', 'page');
+        return current;
+      }
+      const up = element('button', { type: 'button', textContent: group.title });
+      up.addEventListener('click', () => openGroup(group));
+      return element('li', {}, up);
+    }));
+    const button = $('cluster');
+    button.hidden = at.skills.length < SMALLEST;
+    button.disabled = at.clustering;
+    button.textContent = at.clustering ? 'Clustering…' : at.groups ? 'Ungroup' : 'Cluster';
+  }
+
+  // Cluster: the group's skills, their names and descriptions, to the model, through the server; one level.
+  // Ungroup: its skills again, its groups forgotten. An answer after another scan changes nothing.
+  $('cluster').addEventListener('click', async () => {
+    const group = at;
+    for (const error of $('messages').querySelectorAll('.cluster-error')) error.remove();
+    if (group.groups) {
+      group.groups = null;
+      return list();
+    }
+    const scan = scans;
+    const failed = (message) => $('messages').append(element('div', { className: 'error cluster-error', textContent: message }));
+    group.clustering = true;
+    list();
+    try {
+      const response = await fetch('/api/cluster', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skills: group.skills.map(({ id, name, description }) => ({ id, name, description })) }),
+      });
+      const result = await response.json();
+      if (scan !== scans) return;
+      if (!response.ok) return failed(result.error);
+      const byId = new Map(group.skills.map((skill) => [skill.id, skill]));
+      group.groups = result.groups.map(({ title, skills }) => node(title, skills.map((id) => byId.get(id)).filter(Boolean), group));
+    } catch (error) {
+      if (scan === scans) failed(`Cannot reach the Skill Atlas server: ${error.message}`);
+    } finally {
+      group.clustering = false;
+      if (scan === scans) list();
+    }
+  });
 
   // `2026-10-12T09:30:00.000Z` → `2026-10-12`: the day, in UTC, as the CLI prints it.
   const day = (date) => date.slice(0, 10);
