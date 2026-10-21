@@ -31,11 +31,12 @@ test('malformed front matter → the directory name, no description, its YAML as
   assert.equal('warning' in parsed, false);
 });
 
-test('front matter that is not there, not closed or not a mapping → the directory name, and no warning', () => {
-  for (const text of ['# Notes', '---\nname: open\n# Notes', '---\n- a list\n---\n# Notes']) {
-    assert.deepEqual(Object.keys(parseSkill(text)).sort(), ['body', 'description', 'frontMatter', 'properties']);
-    assert.equal(parseSkill(text).name, undefined);
-  }
+test('front matter that is not there, not closed or not a mapping → the directory name, its text as it is, and no warning', () => {
+  const none = { description: '', properties: {} };
+  assert.deepEqual(parseSkill('# Notes'), { ...none, body: '# Notes', frontMatter: '' });
+  // Not closed: no front matter, the whole file is the body.
+  assert.deepEqual(parseSkill('---\nname: open\n# Notes'), { ...none, body: '---\nname: open\n# Notes', frontMatter: '' });
+  assert.deepEqual(parseSkill('---\n- a list\n---\n# Notes'), { ...none, body: '# Notes', frontMatter: '- a list' });
 });
 
 test('scan prints the repository, then each skill with its first sentence and pinned link', () => {

@@ -31,7 +31,7 @@ test('the empty page: the title, the field, Scan, and the placeholder', async ({
   });
 });
 
-test('a local directory, scanned with Enter: the repository, its skills sorted by name, the warnings', async ({ page, step }) => {
+test('a local directory, scanned with Enter: the repository, its skills sorted by name, no warnings', async ({ page, step }) => {
   await step('a local directory typed', async () => {
     await field(page).fill(FIXTURE);
     await expect(field(page)).toHaveValue(FIXTURE);

@@ -80,7 +80,7 @@ test('the filter: a field over the skills, and its script, served as JavaScript'
   assert.doesNotMatch(script.text, /innerHTML/);
 });
 
-test('./fixture: the repository, every skill sorted by name with its link and SKILL.md, and the warnings', async () => {
+test('./fixture: the repository, every skill sorted by name with its link and SKILL.md, and no warnings', async () => {
   const { status, body } = await scanned(FIXTURE);
   assert.equal(status, 200);
   assert.equal(body.repository.id, 'fixture');
