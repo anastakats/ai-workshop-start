@@ -16,8 +16,8 @@ test('web view', async ({ page }) => {
 
   await caption(page, 'Select a skill to read its SKILL.md', 600);
   await skills.filter({ hasText: 'commits' }).click();
-  await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
-  await caption(page, 'The SKILL.md as it is, its link, and its copies');
+  await expect(page.locator('article .title')).toHaveText('commits');
+  await caption(page, 'The SKILL.md, rendered, its link, and its copies');
 
   await caption(page, 'Filter the skills by name or description', 600);
   await type(page.getByRole('searchbox', { name: 'Filter the skills' }), 'commit');

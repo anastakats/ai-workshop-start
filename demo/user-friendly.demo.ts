@@ -18,20 +18,20 @@ test('user friendly', async ({ page, context }) => {
   await card.getByRole('button', { name: /^example/ }).click();
   const skills = page.locator('#skills').getByRole('button');
   await skills.filter({ hasText: 'commits' }).click();
-  await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
+  await expect(page.locator('article .title')).toHaveText('commits');
   const search = () => decodeURIComponent(new URL(page.url()).search);
   expect(search()).toBe('?repo=JetBrains/example&skill=commits');
   await caption(page, `In the URL: ${search()}`, 2500);
 
   await page.reload();
-  await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
+  await expect(page.locator('article .title')).toHaveText('commits');
   await caption(page, 'Reloaded, or shared: the same repository, the same skill');
 
   await page.goBack();
   await expect(card.locator('.among')).toHaveText('4 with skills, among them');
   await caption(page, 'Back: the organization again');
   await page.goForward();
-  await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
+  await expect(page.locator('article .title')).toHaveText('commits');
 
   const copy = page.locator('article .copy');
   await copy.click();

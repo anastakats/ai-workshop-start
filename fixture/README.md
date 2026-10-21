@@ -5,7 +5,7 @@ A small repository for the tests.
 | Path | Case |
 | --- | --- |
 | `.claude/skills/commits` | a skill |
-| `.github/skills/code-style` | a skill in another agent's folder |
+| `.github/skills/code-style` | a skill in another agent's folder; Markdown to render: a list in the front matter, a table, code, a relative link |
 | `.agents/skills/release-checklist` | malformed front matter |
 | `.agents/skills/plain-notes` | no front matter |
 | `.claude/skills/no-name` | no `name`: the directory's |

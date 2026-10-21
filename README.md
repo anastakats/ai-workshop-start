@@ -16,7 +16,7 @@ build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle 
 
 `owner/repo` works too. In the browser, `./skill-atlas serve` opens the [web view](spec/web.md) at
 http://localhost:3000 (`--port N` for another port): the skills on the left, filtered by name or description,
-the selected `SKILL.md` on the right. `github.com/<org>` in the same field scans a whole organization: its
+the selected `SKILL.md` on the right, rendered, its front matter a table. `github.com/<org>` in the same field scans a whole organization: its
 repositories with skills, the most skills first. Before a scan, examples to click; the page's URL keeps the scan
 and the selected skill (`?repo=JetBrains/kotlin&skill=…`), to reload or share; **Copy link** copies a skill's link.
 
