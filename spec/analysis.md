@@ -23,7 +23,7 @@ Skill: id = `repo:path`, name, description, commit, updated
 - On GitHub: one more request for each skill, at the same time as its `SKILL.md`; the commit's committer date
 - A local directory: the last commit from `git log`; outside git, or not committed yet, when its `SKILL.md` was modified
 - In UTC, ISO 8601: `updated`, empty if unknown; shown as the day, `2026-10-12`
-- The repository: *last updated*, the latest of its skills'
+- The repository: *last updated*, the latest of its skills', on the command line; the web view shows each skill's, not the repository's
 - A date that cannot be had (the rate limit, an error) → the skill without it and a *warning*, one for each reason with how many skills, the scan goes on:
   `the last update of 2 skills is unknown: GitHub rate limit reached; set GITHUB_TOKEN`
 - Copies: not dated, as they are not read

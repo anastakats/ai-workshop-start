@@ -2,8 +2,8 @@
 The target interface: scan a repository, then the skills on the left and the selected `SKILL.md` on the right.
 ![Skill Atlas in the browser: JetBrains/kotlin, 6 skills](web.png)
 ## Screen
-- **Header**: `Skill Atlas`, a field `owner/repo or a GitHub link` (or a local directory), **Scan**; after a scan, `owner/repo` and `N skills`, then `last updated <day>`, the latest of the skills' ([Last updated](analysis.md#last-updated)); none known, not shown
-- **Left**: every skill, sorted by **name**; under the name, the description on *one line*, cut with `…`
+- **Header**: `Skill Atlas`, a field `owner/repo or a GitHub link` (or a local directory), **Scan**; after a scan, `owner/repo` and `N skills`; *not* the repository's last update
+- **Left**: every skill, sorted by **name**; under the name, the description on *one line*, cut with `…`, then `updated <day>`, *the skill's own* ([Last updated](analysis.md#last-updated)); unknown, not shown
 - **Filter**: a field `Filter the skills` over them, after a scan; see [Filter the skills](#filter-the-skills)
 - **Before a scan**: on the left, `Scan a repository to see its skills. Try:` and examples; see [Start](#start)
 - **Right**: the selected skill's `SKILL.md`, *as it is*, with its link, **Copy link**, `also in` and `updated <day>`; before a selection, `Select a skill to read its SKILL.md.`; see [Copy link](#copy-link)
