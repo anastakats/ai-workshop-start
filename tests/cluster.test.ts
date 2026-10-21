@@ -142,8 +142,8 @@ test('cluster ./fixture: the groups, each with its groups or its skills, two spa
       '    plain-notes',
     ].join('\n'),
   );
-  // The scan's warnings, on stderr, as scan prints them.
-  assert.match(result.stderr, /^warning: \.agents\/skills\/plain-notes\/SKILL\.md: no front matter/);
+  // The scan's warnings, on stderr, as scan prints them: none for ./fixture, its front matter is the skills' own.
+  assert.equal(result.stderr, '');
 });
 
 test('cluster: a level the model fails, a warning on stderr; the first, the message and exit code 1', async () => {

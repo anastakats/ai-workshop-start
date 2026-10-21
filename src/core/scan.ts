@@ -62,7 +62,7 @@ async function readSkill(source: Source, file: SkillFile): Promise<{ skill?: Ski
     content,
     updated: typeof updated === 'string' ? updated : '',
   };
-  return { skill, warning: parsed.warning && `${file.path}: ${parsed.warning}`, unknown: typeof updated === 'string' ? undefined : updated.reason };
+  return { skill, unknown: typeof updated === 'string' ? undefined : updated.reason };
 }
 
 /** The same date in UTC, so that dates compare as text; or why it is not one. */

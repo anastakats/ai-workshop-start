@@ -97,10 +97,8 @@ test('./fixture: the repository, every skill sorted by name with its link and SK
   assert.equal(commits.description, 'Write commit messages the way this repository does. Use for every commit.');
   assert.deepEqual(commits.copies, ['.github/skills/commits/SKILL.md']);
   assert.equal(commits.updated, '2026-10-14T16:45:00.000Z');
-  assert.deepEqual(body.warnings, [
-    '.agents/skills/plain-notes/SKILL.md: no front matter; using the directory name',
-    '.agents/skills/release-checklist/SKILL.md: malformed front matter: Nested mappings are not allowed in compact mappings at line 3, column 14; using the directory name',
-  ]);
+  // No front matter, or a malformed one: no warning.
+  assert.deepEqual(body.warnings, []);
 });
 
 test('owner/repo and a GitHub link: the same answer, linked at the scanned commit, with its SKILL.md', async () => {

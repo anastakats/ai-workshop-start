@@ -22,14 +22,20 @@ const anyDay = (text: string) => text.replace(/\d{4}-\d{2}-\d{2}/g, '<day>');
 const fixture = await atlas(['scan', FIXTURE]);
 const example = await atlas(['scan', 'github.com/JetBrains/example']);
 
-test('malformed front matter → the directory name, no description and a warning', () => {
+test('malformed front matter → the directory name, no description, its YAML as it is, and no warning', () => {
   const parsed = parseSkill(readFileSync(join(FIXTURE, '.agents/skills/release-checklist/SKILL.md'), 'utf8'));
   assert.equal(parsed.name, undefined);
   assert.equal(parsed.description, '');
-  assert.equal(
-    parsed.warning,
-    'malformed front matter: Nested mappings are not allowed in compact mappings at line 3, column 14; using the directory name',
-  );
+  assert.equal(parsed.frontMatter, 'name: release-checklist\ndescription: Steps before a release: tag, notes, announce');
+  assert.match(parsed.body, /^# Release checklist\n/);
+  assert.equal('warning' in parsed, false);
+});
+
+test('front matter that is not there, not closed or not a mapping → the directory name, and no warning', () => {
+  for (const text of ['# Notes', '---\nname: open\n# Notes', '---\n- a list\n---\n# Notes']) {
+    assert.deepEqual(Object.keys(parseSkill(text)).sort(), ['body', 'description', 'frontMatter', 'properties']);
+    assert.equal(parseSkill(text).name, undefined);
+  }
 });
 
 test('scan prints the repository, then each skill with its first sentence and pinned link', () => {
@@ -47,7 +53,7 @@ test('scan prints the repository, then each skill with its first sentence and pi
   assert.equal(example.stderr, '');
 });
 
-test('./fixture: every skill, sorted by name, linked to its file, with a warning for each unreadable front matter', () => {
+test('./fixture: every skill, sorted by name, linked to its file; its malformed or missing front matter, no warning', () => {
   const root = pathToFileURL(FIXTURE).href;
   assert.equal(fixture.code, 0);
   assert.equal(
@@ -75,10 +81,8 @@ test('./fixture: every skill, sorted by name, linked to its file, with a warning
       '  updated 2026-09-15',
     ].join('\n'),
   );
-  assert.deepEqual(fixture.stderr.split('\n'), [
-    'warning: .agents/skills/plain-notes/SKILL.md: no front matter; using the directory name',
-    'warning: .agents/skills/release-checklist/SKILL.md: malformed front matter: Nested mappings are not allowed in compact mappings at line 3, column 14; using the directory name',
-  ]);
+  // The skills' own text is not the scan's problem: plain-notes has no front matter, release-checklist's is malformed.
+  assert.equal(fixture.stderr, '');
 });
 
 test('the same name in several skill roots → one skill, linked in the first root, the others as copies', () => {
@@ -96,7 +100,7 @@ test('only <name>/SKILL.md in a skill root at the repository root is a skill; an
     assert.doesNotMatch(stdout, /not-a-skill/);
     assert.doesNotMatch(stderr, /not-a-skill|examples|docs\/|packages\/|agent\/skills|(?:^|\s)SKILL\.md/);
   }
-  assert.equal(fixture.stderr.split('\n').length, 2); // the two unreadable front matters, nothing else
+  assert.equal(fixture.stderr, '');
 });
 
 test('the CLI prints the result at once and stores nothing', (t) => {
