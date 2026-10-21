@@ -5,7 +5,7 @@ The skills in groups, by a model, *by request*: in the web view, one level a cli
 - A group of *3 or more* skills can be clustered again; *fewer than 3*: the smallest, not clustered
 - The model reads the skills' **name** and **description** only, a line each: `N. name — description`, numbered; not the `SKILL.md`
 - Its answer, JSON: `{"groups": [{"title", "skills": [<numbers>]}]}`, in a code block or not
-  - A number out of range: ignored; a skill in two groups: in the first; in none: in `Other`; an empty group: dropped; no title: `Group N`
+  - A number out of range: ignored; a skill in two groups: in the first; twice in one, once; in none: in `Other`; an empty group: dropped; no title: `Group N`
   - Not JSON, or no `groups`: `The model's answer is not groups: <its start>`; all in one group: `The model put all N skills in one group`
 - The most skills first, then by title; in a group, the skills sorted as everywhere ([by name](analysis.md#output))
 - *Nothing is stored*: asked again, the model may answer other groups
