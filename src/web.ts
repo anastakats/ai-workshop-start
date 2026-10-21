@@ -33,7 +33,7 @@ const MAX_BODY = 4 * 1024 * 1024;
 /**
  * `GET /`, the page, and its scripts: `GET /filter.js`, `/markdown.js`, `/marked.js`; `GET /api/scan?repo=<input>`,
  * `{ repository, skills, warnings }`, each skill with its `link`, `frontMatter` and `body`, or `400 { error }`; `GET /api/organization?org=<input>`, see `scanOrganization` below;
- * `POST /api/cluster`, see `cluster` below.
+ * `POST /api/cluster`, see `cluster` below. Any of them for another `Host` than this server's, `403 { error }`.
  */
 export function createWebServer(context: WebContext): Server {
   return createServer(async (request, response) => {
@@ -42,6 +42,8 @@ export function createWebServer(context: WebContext): Server {
       response.end(body);
     };
     const json = (status: number, body: unknown) => send(status, 'application/json', JSON.stringify(body));
+    // Another name, even one that resolves to 127.0.0.1 (DNS rebinding): another site's page, refused.
+    if (!isLocalHost(request)) return json(403, { error: `Not allowed: Host ${request.headers.host || '(none)'}` });
     const url = new URL(request.url ?? '/', 'http://localhost');
     if (url.pathname === '/api/cluster') return request.method === 'POST' ? cluster(request, response, json) : json(405, { error: `Not allowed: ${request.method}` });
     if (request.method !== 'GET') return json(405, { error: `Not allowed: ${request.method}` });
@@ -107,6 +109,12 @@ export function createWebServer(context: WebContext): Server {
       response.end();
     }
   }
+}
+
+/** `Host: localhost:<port>` or `127.0.0.1:<port>`, the port this server listens on; without one, 80. */
+function isLocalHost(request: IncomingMessage): boolean {
+  const match = /^(localhost|127\.0\.0\.1)(?::(\d+))?$/i.exec(request.headers.host ?? '');
+  return match !== null && Number(match[2] ?? 80) === request.socket.localPort;
 }
 
 /** The request's body as JSON, up to MAX_BODY. */

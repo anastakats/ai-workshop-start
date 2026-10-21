@@ -13,6 +13,7 @@ The target interface: scan a repository, then the skills on the left and the sel
 - Errors: the CLI's message, in the page, and no skills; warnings under the header
 ## Server
 - Local only: listens on `127.0.0.1`; the token, `GITHUB_TOKEN` or gh's ([the token](cli.md)), stays on the server
+- Only for `Host: localhost:<port>` or `127.0.0.1:<port>`, its own port: the page and the API; another `Host`, as a browser sends after a DNS rebinding, `403 { error }`
 - `GET /` the page, with any query too, `GET /filter.js` its filter, `GET /markdown.js` and `GET /marked.js` its Markdown; `GET /api/scan?repo=<input>` → `{ repository, skills, warnings }`, each skill with its `link`, `content`, `updated`, `frontMatter` and `body` ([Preview](#preview))
 - `POST /api/cluster`: one level of groups, by the model; see [Clustering](cluster.md#server)
 - A clear message → `400 { error }`; *nothing is stored*
