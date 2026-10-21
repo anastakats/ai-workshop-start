@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
 import { AtlasError } from '../src/core/errors.ts';
-import { createWebServer, listen } from '../src/web.ts';
+import { createWebServer, listen, preview } from '../src/web.ts';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE, open, organization } from './helpers.ts';
 
 const server = createWebServer({ open, organization });
@@ -34,8 +34,23 @@ test('the page: the title, the field, Scan, and the placeholder for SKILL.md', a
   assert.match(page.text, /<input id="repo"[^>]* placeholder="owner\/repo or a GitHub link"/);
   assert.match(page.text, /<button id="submit" type="submit">Scan<\/button>/);
   assert.match(page.text, /Select a skill to read its SKILL\.md\./);
-  // The SKILL.md is text, never HTML.
-  assert.doesNotMatch(page.text, /innerHTML/);
+  // Only the SKILL.md's Markdown goes in as HTML, rendered; every other text as text.
+  assert.equal(page.text.match(/innerHTML/g)?.length, 1);
+  assert.match(page.text, /\.innerHTML = renderMarkdown\(skill\.body, skill\.link\)/);
+});
+
+test('the Markdown: its script, and marked, which renders it, served as JavaScript; the page imports them', async () => {
+  const page = await get('/');
+  assert.match(page.text, /<script type="importmap">\{ "imports": \{ "marked": "\/marked\.js" \} \}<\/script>/);
+  assert.match(page.text, /import \{ renderMarkdown \} from '\/markdown\.js'/);
+  const script = await get('/markdown.js');
+  assert.equal(script.status, 200);
+  assert.equal(script.type, 'text/javascript; charset=utf-8');
+  assert.equal(script.text, readFileSync(new URL('../src/web/markdown.js', import.meta.url), 'utf8'));
+  const marked = await get('/marked.js');
+  assert.equal(marked.status, 200);
+  assert.equal(marked.type, 'text/javascript; charset=utf-8');
+  assert.equal(marked.text, readFileSync(new URL(import.meta.resolve('marked')), 'utf8'));
 });
 
 test('before a scan, the examples: a repository and an organization, each a button with what it scans', async () => {
@@ -105,8 +120,55 @@ test('owner/repo and a GitHub link: the same answer, linked at the scanned commi
       content: '---\nname: commits\ndescription: Write commit messages the way this repository does. Use for every commit.\n---\n# Commits\n',
       updated: '2026-10-12T07:30:00.000Z',
       link: `https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`,
+      frontMatter: [
+        ['name', 'commits'],
+        ['description', 'Write commit messages the way this repository does. Use for every commit.'],
+      ],
+      body: '# Commits',
     },
   ]);
+});
+
+test('each skill, for the preview: its front matter, key by key, and the Markdown after it', async () => {
+  const { body } = await scanned(FIXTURE);
+  const skill = (name: string) => body.skills.find((skill: { name: string }) => skill.name === name);
+  // In its order; a list, joined.
+  assert.deepEqual(skill('code-style').frontMatter, [
+    ['name', 'code-style'],
+    ['description', "Follow the project's code style. Use before committing Kotlin or Java changes."],
+    ['allowed-tools', 'Read, Grep'],
+  ]);
+  assert.match(skill('code-style').body, /^# Code style\n\n- Four spaces/);
+  // Only the keys it has.
+  assert.deepEqual(skill('no-name').frontMatter, [['description', 'Named after its directory. Its front matter has no name.']]);
+  // No front matter: none, the whole file is Markdown.
+  assert.equal(skill('plain-notes').frontMatter, null);
+  assert.equal(skill('plain-notes').body, '# Plain notes\n\nNo front matter at all.');
+  // Malformed: its YAML as it is; the Markdown after it.
+  assert.equal(
+    skill('release-checklist').frontMatter,
+    'name: release-checklist\ndescription: Steps before a release: tag, notes, announce',
+  );
+  assert.match(skill('release-checklist').body, /^# Release checklist\n/);
+});
+
+test('the front matter: text and numbers as they are, a list joined, a mapping as YAML', () => {
+  assert.deepEqual(
+    preview('---\nname: x\nversion: 2\nbeta: true\ntags: [a, b]\nmetadata:\n  author: me\n  team: ai\nempty:\n---\nBody\n'),
+    {
+      frontMatter: [
+        ['name', 'x'],
+        ['version', '2'],
+        ['beta', 'true'],
+        ['tags', 'a, b'],
+        ['metadata', 'author: me\nteam: ai'],
+        ['empty', ''],
+      ],
+      body: 'Body',
+    },
+  );
+  assert.deepEqual(preview('---\n---\n# Empty'), { frontMatter: null, body: '# Empty' });
+  assert.deepEqual(preview('---\n- a list\n---\n# List'), { frontMatter: '- a list', body: '# List' });
 });
 
 test("errors: the CLI's message as 400 { error }", async () => {

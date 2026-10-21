@@ -2,13 +2,20 @@
 // GitHub token, if any, stays here.
 import { readFile } from 'node:fs/promises';
 import { createServer, type Server, type ServerResponse } from 'node:http';
+import { parse, stringify } from 'yaml';
 import { AtlasError } from './core/errors.ts';
 import { skillLink } from './core/model.ts';
 import type { OrganizationOptions, OrganizationResult } from './core/organization.ts';
+import { parseSkill } from './core/parse.ts';
 import { scan, type Source } from './core/scan.ts';
 
 const PAGE = new URL('./web/index.html', import.meta.url);
-const FILTER = new URL('./web/filter.js', import.meta.url);
+// The page's scripts: the filter, the Markdown, and marked, which renders it.
+const SCRIPTS: Record<string, URL> = {
+  '/filter.js': new URL('./web/filter.js', import.meta.url),
+  '/markdown.js': new URL('./web/markdown.js', import.meta.url),
+  '/marked.js': new URL(import.meta.resolve('marked')),
+};
 
 export type WebContext = {
   /** Opens what the user asked to scan. */
@@ -18,8 +25,8 @@ export type WebContext = {
 };
 
 /**
- * `GET /`, the page, and `GET /filter.js`, its filter; `GET /api/scan?repo=<input>`, `{ repository, skills, warnings }`
- * or `400 { error }`; `GET /api/organization?org=<input>`, see `scanOrganization` below.
+ * `GET /`, the page, and its scripts: `GET /filter.js`, `/markdown.js`, `/marked.js`; `GET /api/scan?repo=<input>`,
+ * `{ repository, skills, warnings }`, each skill with its `link`, `frontMatter` and `body`, or `400 { error }`; `GET /api/organization?org=<input>`, see `scanOrganization` below.
  */
 export function createWebServer(context: WebContext): Server {
   return createServer(async (request, response) => {
@@ -31,14 +38,14 @@ export function createWebServer(context: WebContext): Server {
     const url = new URL(request.url ?? '/', 'http://localhost');
     if (request.method !== 'GET') return json(405, { error: `Not allowed: ${request.method}` });
     if (url.pathname === '/') return send(200, 'text/html', await readFile(PAGE, 'utf8'));
-    if (url.pathname === '/filter.js') return send(200, 'text/javascript', await readFile(FILTER, 'utf8'));
+    if (url.pathname in SCRIPTS) return send(200, 'text/javascript', await readFile(SCRIPTS[url.pathname], 'utf8'));
     if (url.pathname === '/api/organization') return scanOrganization(url.searchParams.get('org')?.trim(), response, json);
     if (url.pathname !== '/api/scan') return json(404, { error: `Not found: ${url.pathname}` });
     const input = url.searchParams.get('repo')?.trim();
     if (!input) return json(400, { error: 'Enter owner/repo, a GitHub link or a directory' });
     try {
       const result = await scan(await context.open(input));
-      const skills = result.skills.map((skill) => ({ ...skill, link: skillLink(result.repository, skill) }));
+      const skills = result.skills.map((skill) => ({ ...skill, link: skillLink(result.repository, skill), ...preview(skill.content) }));
       json(200, { repository: result.repository, skills, warnings: result.warnings });
     } catch (error) {
       if (error instanceof AtlasError) json(400, { error: error.message });
@@ -70,6 +77,31 @@ export function createWebServer(context: WebContext): Server {
       response.end();
     }
   }
+}
+
+/**
+ * A SKILL.md as the page shows it: `frontMatter`, each key and its value as text, or the YAML as it is
+ * when it cannot be read as a mapping, `null` without one; `body`, the Markdown after it.
+ */
+export function preview(content: string): { frontMatter: [string, string][] | string | null; body: string } {
+  const { frontMatter, body } = parseSkill(content);
+  if (!frontMatter.trim()) return { frontMatter: null, body };
+  let data: unknown;
+  try {
+    data = parse(frontMatter);
+  } catch {
+    return { frontMatter, body };
+  }
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return { frontMatter, body };
+  return { frontMatter: Object.entries(data).map(([key, value]) => [key, asText(value)]), body };
+}
+
+/** A value of the front matter: text and numbers as they are, a list of them joined by `, `, the rest as YAML. */
+function asText(value: unknown): string {
+  const scalar = (item: unknown) => item === null || typeof item !== 'object';
+  if (scalar(value)) return String(value ?? '');
+  if (Array.isArray(value) && value.every(scalar)) return value.map((item) => String(item ?? '')).join(', ');
+  return stringify(value).trimEnd();
 }
 
 /** Listens on 127.0.0.1 only; the URL to open. */

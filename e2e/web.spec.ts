@@ -1,6 +1,5 @@
 // The base scenarios of spec/web.md, in a browser: what a user types, clicks and sees; one step at
 // a time, each one screenshotted (e2e/steps.ts).
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { EXAMPLE_COMMIT, FIXTURE } from '../tests/helpers.ts';
@@ -56,7 +55,7 @@ test('a local directory, scanned with Enter: the repository, its skills sorted b
   });
 });
 
-test('selecting a skill shows its SKILL.md as it is, its link and its copies; another selection replaces it', async ({ page, step }) => {
+test('selecting a skill shows its SKILL.md rendered, its link and its copies; another selection replaces it', async ({ page, step }) => {
   await step('scanned', async () => {
     await field(page).fill(FIXTURE);
     await scanButton(page).click();
@@ -68,13 +67,18 @@ test('selecting a skill shows its SKILL.md as it is, its link and its copies; an
   await step('commits selected', async () => {
     await commits.click();
     await expect(commits).toHaveAttribute('aria-current', 'true');
-    await expect(skill.getByRole('heading')).toHaveText('commits');
+    await expect(skill.locator('.title')).toHaveText('commits');
     const link = `${pathToFileURL(FIXTURE).href}/.claude/skills/commits/SKILL.md`;
-    await expect(skill.getByRole('link')).toHaveAttribute('href', link);
+    await expect(skill.locator('.link').getByRole('link')).toHaveAttribute('href', link);
     await expect(skill.locator('.copies')).toHaveText('also in .github/skills/commits/SKILL.md');
     await expect(skill.locator('.updated')).toHaveText('updated 2026-10-14');
-    // Front matter and Markdown, as text: not rendered.
-    await expect(skill.locator('pre')).toHaveText(readFileSync(join(FIXTURE, '.claude/skills/commits/SKILL.md'), 'utf8'));
+    // The front matter, a table; the Markdown, rendered.
+    await expect(skill.locator('.front-matter th')).toHaveText(['name', 'description']);
+    await expect(skill.locator('.front-matter td')).toHaveText(['commits', 'Write commit messages the way this repository does. Use for every commit.']);
+    await expect(skill.locator('.markdown').getByRole('heading', { level: 1 })).toHaveText('Commits');
+    await expect(skill.locator('.markdown code')).toHaveText('editor: keep the caret after undo');
+    await expect(skill.locator('.markdown')).not.toContainText('---');
+    await expect(skill.locator('.markdown')).not.toContainText('# Commits');
   });
 
   await step('code-style selected instead', async () => {
@@ -82,9 +86,53 @@ test('selecting a skill shows its SKILL.md as it is, its link and its copies; an
     await codeStyle.click();
     await expect(codeStyle).toHaveAttribute('aria-current', 'true');
     await expect(commits).toHaveAttribute('aria-current', 'false');
-    await expect(skill.getByRole('heading')).toHaveText('code-style');
+    await expect(skill.locator('.title')).toHaveText('code-style');
     await expect(skill.locator('.copies')).toHaveCount(0);
     await expect(skill.locator('.updated')).toHaveText('updated 2026-10-02');
+    await expect(skill.locator('.markdown').getByRole('heading', { level: 1 })).toHaveText('Code style');
+  });
+});
+
+test('the preview: the front matter as a table, then the Markdown as GitHub renders it', async ({ page, step }) => {
+  const skill = page.locator('article');
+  const markdown = skill.locator('.markdown');
+  await step('code-style selected', async () => {
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await skills(page).filter({ hasText: 'code-style' }).click();
+    await expect(skill.locator('.title')).toHaveText('code-style');
+  });
+
+  await step('its front matter, key by key', async () => {
+    const rows = skill.locator('.front-matter tr');
+    await expect(rows.locator('th')).toHaveText(['name', 'description', 'allowed-tools']);
+    await expect(rows.locator('td')).toHaveText(['code-style', "Follow the project's code style. Use before committing Kotlin or Java changes.", 'Read, Grep']);
+  });
+
+  await step('its Markdown, rendered', async () => {
+    await expect(markdown.getByRole('heading', { level: 1 })).toHaveText('Code style');
+    await expect(markdown.getByRole('heading', { level: 2 })).toHaveText('Names');
+    await expect(markdown.locator('ul > li')).toHaveText(['Four spaces, no tabs; lines up to 120 characters.', 'Prefer val over var.']);
+    await expect(markdown.locator('table').locator('th, td')).toHaveText(['What', 'How', 'Classes', 'PascalCase', 'Functions', 'camelCase']);
+    await expect(markdown.locator('pre code')).toHaveText('val answer = 42\n');
+    await expect(markdown.locator('blockquote')).toContainText('Format with the IDE before committing');
+    // A relative link: next to the SKILL.md, in a new tab.
+    const checklist = markdown.getByRole('link', { name: 'the checklist' });
+    await expect(checklist).toHaveAttribute('href', `${pathToFileURL(FIXTURE).href}/.github/skills/code-style/checklist.md`);
+    await expect(checklist).toHaveAttribute('target', '_blank');
+  });
+
+  await step('no front matter: only the Markdown', async () => {
+    await skills(page).filter({ hasText: 'plain-notes' }).click();
+    await expect(skill.locator('.front-matter')).toHaveCount(0);
+    await expect(markdown.getByRole('heading', { level: 1 })).toHaveText('Plain notes');
+    await expect(markdown.locator('p')).toHaveText('No front matter at all.');
+  });
+
+  await step('malformed front matter: its YAML as it is, then the Markdown', async () => {
+    await skills(page).filter({ hasText: 'release-checklist' }).click();
+    await expect(skill.locator('pre.front-matter')).toHaveText('name: release-checklist\ndescription: Steps before a release: tag, notes, announce');
+    await expect(markdown.locator('ol > li')).toHaveText(['Tag the release.', 'Write the release notes.', 'Announce it.']);
   });
 });
 
@@ -100,11 +148,11 @@ test('owner/repo on GitHub: the skill, linked at the scanned commit, with its SK
 
   await step('its skill selected', async () => {
     await skills(page).first().click();
-    await expect(page.locator('article').getByRole('link')).toHaveAttribute(
+    await expect(page.locator('article .link').getByRole('link')).toHaveAttribute(
       'href',
       `https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`,
     );
-    await expect(page.locator('article pre')).toContainText('# Commits');
+    await expect(page.locator('article .markdown').getByRole('heading', { level: 1 })).toHaveText('Commits');
     // On GitHub, when the skill was last committed, in UTC.
     await expect(page.locator('article .updated')).toHaveText('updated 2026-10-12');
   });
@@ -115,7 +163,7 @@ test("an unreachable repository: the CLI's message, no skills; the next scan wor
     await field(page).fill(FIXTURE);
     await scanButton(page).click();
     await skills(page).first().click();
-    await expect(page.locator('article').getByRole('heading')).toHaveText('code-style');
+    await expect(page.locator('article .title')).toHaveText('code-style');
   });
 
   await step('an unreachable repository', async () => {
@@ -175,7 +223,7 @@ test("each skill's day under it in the list, not the repository's; unknown, none
 
   await step('the skill without a date selected', async () => {
     await skills(page).filter({ hasText: 'commits' }).click();
-    await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
+    await expect(page.locator('article .title')).toHaveText('commits');
     await expect(page.locator('article .updated')).toHaveCount(0);
   });
 });
@@ -236,18 +284,18 @@ test('the filter keeps the selection; a new scan clears it, an error hides it', 
     await field(page).fill(FIXTURE);
     await scanButton(page).click();
     await skills(page).filter({ hasText: 'commits' }).click();
-    await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
+    await expect(page.locator('article .title')).toHaveText('commits');
   });
 
   await step('filtered: the selection kept', async () => {
     await filter(page).fill('commit');
     await expect(skills(page).filter({ hasText: 'commits' })).toHaveAttribute('aria-current', 'true');
-    await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
+    await expect(page.locator('article .title')).toHaveText('commits');
   });
 
   await step('code-style selected in the filtered list', async () => {
     await skills(page).filter({ hasText: 'code-style' }).click();
-    await expect(page.locator('article').getByRole('heading')).toHaveText('code-style');
+    await expect(page.locator('article .title')).toHaveText('code-style');
   });
 
   await step('a new scan: the filter emptied', async () => {
@@ -432,7 +480,7 @@ test('the URL: what is scanned and the selected skill; reloaded, the same; Back 
     await page.reload();
     await expect(field(page)).toHaveValue(FIXTURE);
     await expect(skills(page).filter({ hasText: 'commits' })).toHaveAttribute('aria-current', 'true');
-    await expect(article(page).getByRole('heading')).toHaveText('commits');
+    await expect(article(page).locator('.title')).toHaveText('commits');
   });
 
   await step('another repository scanned: no skill', async () => {
@@ -447,7 +495,7 @@ test('the URL: what is scanned and the selected skill; reloaded, the same; Back 
     await page.goBack();
     await expect(field(page)).toHaveValue(FIXTURE);
     await expect(page.locator('#repository')).toHaveText('fixture6 skills');
-    await expect(article(page).getByRole('heading')).toHaveText('commits');
+    await expect(article(page).locator('.title')).toHaveText('commits');
   });
 
   await step('Back again: the empty page', async () => {
@@ -461,7 +509,7 @@ test('the URL: what is scanned and the selected skill; reloaded, the same; Back 
   await step('Forward: the scan again', async () => {
     await page.goForward();
     await expect(field(page)).toHaveValue(FIXTURE);
-    await expect(article(page).getByRole('heading')).toHaveText('commits');
+    await expect(article(page).locator('.title')).toHaveText('commits');
   });
 
   await step('Back to the empty page while a scan answers: the empty page stays', async () => {
@@ -483,7 +531,7 @@ test('the URL: what is scanned and the selected skill; reloaded, the same; Back 
     await expect(examples(page)).toBeVisible();
     await page.unroute('**/api/scan?*');
     await page.goForward();
-    await expect(article(page).getByRole('heading')).toHaveText('commits');
+    await expect(article(page).locator('.title')).toHaveText('commits');
   });
 
   await step('the same repository scanned again: no new entry, the skill dropped', async () => {
@@ -500,7 +548,7 @@ test('a shared link: the repository scanned and its skill selected; a skill it d
     await page.goto('/?repo=JetBrains/example&skill=commits');
     await expect(field(page)).toHaveValue('JetBrains/example');
     await expect(skills(page).filter({ hasText: 'commits' })).toHaveAttribute('aria-current', 'true');
-    await expect(article(page).getByRole('heading')).toHaveText('commits');
+    await expect(article(page).locator('.title')).toHaveText('commits');
   });
 
   await step('a skill it does not have: none selected, dropped from the URL', async () => {

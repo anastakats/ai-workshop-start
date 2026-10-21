@@ -52,7 +52,7 @@
   .description { display: block; margin-top: 4px; color: var(--muted); font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   article { flex: 1; overflow: auto; padding: 32px 56px; }
   .placeholder { margin-top: 72px; color: var(--muted); font-size: 18px; }
-  article h2 { margin: 0 0 8px; font: 600 22px var(--mono); }
+  article h2.title { margin: 0 0 8px; font: 600 22px var(--mono); }
   article a { color: var(--accent); word-break: break-all; font-size: 14px; }
   .link { display: flex; align-items: baseline; gap: 12px; margin: 0; }
   .copy { flex: none; padding: 2px 10px; border-radius: 6px; background: var(--chip); color: var(--text); font: 13px var(--sans); }
@@ -60,6 +60,27 @@
   .copies, .updated { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
   nav .updated { display: block; }
   pre { margin: 24px 0 0; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font: 14px/1.55 var(--mono); white-space: pre-wrap; word-wrap: break-word; }
+  .front-matter { margin: 24px 0 0; border-collapse: collapse; font-size: 14px; }
+  .front-matter th, .front-matter td { padding: 6px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .front-matter th { background: var(--chip); font: 500 14px var(--mono); white-space: nowrap; }
+  .front-matter td { background: var(--panel); white-space: pre-wrap; }
+  pre.front-matter { padding: 12px 16px; }
+  .markdown { margin-top: 24px; line-height: 1.6; }
+  .markdown > :first-child { margin-top: 0; }
+  .markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: 24px 0 12px; font: 600 1em/1.3 var(--sans); }
+  .markdown h1 { font-size: 28px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .markdown h2 { font-size: 22px; }
+  .markdown h3 { font-size: 18px; }
+  .markdown a { font-size: inherit; word-break: normal; }
+  .markdown code { padding: 1px 6px; border-radius: 4px; background: var(--chip); font: 0.9em var(--mono); }
+  .markdown pre { margin: 16px 0; white-space: pre; overflow-x: auto; }
+  .markdown pre code { padding: 0; background: none; font-size: 14px; }
+  .markdown blockquote { margin: 16px 0; padding: 0 16px; border-left: 4px solid var(--line); color: var(--muted); }
+  .markdown table { border-collapse: collapse; }
+  .markdown th, .markdown td { padding: 6px 12px; border: 1px solid var(--line); }
+  .markdown th { background: var(--chip); }
+  .markdown img { max-width: 100%; }
+  .markdown hr { border: 0; border-top: 1px solid var(--line); }
   main[hidden], #organization[hidden] { display: none; }
   .sprite { position: absolute; width: 0; height: 0; }
   #organization { flex: 1; overflow: auto; padding: 40px 32px; }
@@ -125,10 +146,12 @@
     </div>
   </div>
 </section>
+<script type="importmap">{ "imports": { "marked": "/marked.js" } }</script>
 <script type="module">
   import { filterSkills } from '/filter.js';
+  import { renderMarkdown } from '/markdown.js';
 
-  // Every text goes in through textContent: a SKILL.md is never HTML here.
+  // Every text goes in through textContent, but a SKILL.md's Markdown, rendered by renderMarkdown.
   const $ = (id) => document.getElementById(id);
   const element = (tag, props = {}, ...children) => {
     const node = Object.assign(document.createElement(tag), props);
@@ -354,14 +377,25 @@
     selected = skill;
     history.replaceState(null, '', address(scannedInput(), skill.name));
     for (const other of $('skills').children) other.setAttribute('aria-current', String(other === item));
+    const markdown = element('div', { className: 'markdown' });
+    markdown.innerHTML = renderMarkdown(skill.body, skill.link);
     $('skill').replaceChildren(
-      element('h2', { textContent: skill.name }),
+      element('h2', { className: 'title', textContent: skill.name }),
       element('p', { className: 'link' },
         element('a', { href: skill.link, textContent: skill.link, target: '_blank', rel: 'noopener' }),
         copyButton(skill.link)),
       ...(skill.copies.length ? [element('p', { className: 'copies', textContent: `also in ${skill.copies.join(', ')}` })] : []),
       ...(skill.updated ? [element('p', { className: 'updated', textContent: `updated ${day(skill.updated)}` })] : []),
-      element('pre', { textContent: skill.content }));
+      ...frontMatter(skill.frontMatter),
+      markdown);
+  }
+
+  // The front matter, above the Markdown: a table of its keys and values; YAML it cannot read, as it is.
+  function frontMatter(entries) {
+    if (typeof entries === 'string') return [element('pre', { className: 'front-matter', textContent: entries })];
+    if (!entries?.length) return [];
+    return [element('table', { className: 'front-matter' }, element('tbody', {}, ...entries.map(([key, value]) =>
+      element('tr', {}, element('th', { scope: 'row', textContent: key }), element('td', { textContent: value })))))];
   }
 
   // `Copy link`: the skill's link on the clipboard; `Copied` for a moment, or `Cannot copy`.
