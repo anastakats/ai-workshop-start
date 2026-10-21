@@ -468,6 +468,32 @@ test('the URL: what is scanned and the selected skill; reloaded, the same; Back 
   });
 });
 
+test('the URL: a skill of the earlier scan selected while another scan answers, dropped once that scan is shown', async ({ page, step }) => {
+  await step('scanned', async () => {
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  });
+
+  await step('another repository scanning, commits selected meanwhile', async () => {
+    let answer!: () => void;
+    const answered = new Promise<void>((resolve) => (answer = resolve));
+    await page.route('**/api/scan?*', async (route) => {
+      await answered;
+      await route.continue();
+    });
+    await field(page).fill('JetBrains/example');
+    await scanButton(page).click();
+    await expect(page.getByRole('button', { name: 'Scanning…' })).toBeDisabled();
+    await skills(page).filter({ hasText: 'commits' }).click();
+    answer();
+    await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
+    await page.unroute('**/api/scan?*');
+    await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
+    expect(query(page)).toEqual({ repo: 'JetBrains/example' });
+  });
+});
+
 test('a shared link: the repository scanned and its skill selected; a skill it does not have, none; an organization', async ({ page, step }) => {
   await step('?repo=JetBrains/example&skill=commits opened', async () => {
     await page.goto('/?repo=JetBrains/example&skill=commits');

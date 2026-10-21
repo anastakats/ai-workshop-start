@@ -23,7 +23,7 @@ The base scenarios end to end, in Chromium: `npm run e2e` (e2e/), with GitHub an
 ## The URL
 - `?repo=<input>`, once scanned, as typed, its `/` and `:` as they are; `&skill=<name>` once a skill is selected
 - Opened, reloaded or shared: the input in the field, scanned; then the skill selected; one the repository does not have, none, dropped from the URL
-- Another input scanned: a new entry in the history; the same one again, or a selection: the same entry, the skill dropped by a new scan
+- Another input scanned: a new entry in the history; the same one again, or a selection: the same entry, the skill dropped by a new scan, one selected while it answered too
 - Back and Forward: the entry's scan again, its skill selected; the first entry, the empty page
 - A scan still answering when another starts, after Back for example, or after Back to the empty page: it changes nothing
 ## Copy link

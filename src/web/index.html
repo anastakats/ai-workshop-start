@@ -202,10 +202,11 @@
       if (stale()) return;
       if (!response.ok) return showError(result.error);
       show(result);
-      // The skill in the URL, if the repository still has it; the first of that name.
+      // The skill in the URL, if the repository still has it; the first of that name. Else none: also one
+      // of the earlier scan, selected while this one answered.
       const index = scanned.findIndex((other) => other.name === skill);
       if (index >= 0) select($('skills').children[index], scanned[index]);
-      else if (skill) history.replaceState(null, '', address(repo));
+      else history.replaceState(null, '', address(repo));
     } catch (error) {
       if (!stale()) showError(`Cannot reach the Skill Atlas server: ${error.message}`);
     } finally {
@@ -222,7 +223,10 @@
     showOrganization(input.replace(/^(?:https?:\/\/)?(?:www\.)?/i, '').replace(/\/$/, ''));
     const response = await fetch(`/api/organization?org=${encodeURIComponent(input)}`);
     if (stale()) return response.body?.cancel();
-    if (!response.ok) return showError((await response.json()).error);
+    if (!response.ok) {
+      const { error } = await response.json();
+      return stale() ? undefined : showError(error);
+    }
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let rest = '';
     for (;;) {
