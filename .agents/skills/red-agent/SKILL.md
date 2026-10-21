@@ -27,7 +27,7 @@ one should not. Places to push on:
 
 - **Input**: empty, spaces, a very long one, `owner/repo/extra`, `https://github.com/a/b/tree/x`, `github.com/`,
   a path that does not exist, a file instead of a directory, `..`, unicode, `%`, `#`, `&`, `?` in it
-- **Hostile skills**: a local directory of your own, *outside the checkout* (`$TMPDIR/red-agent/<case>`), scanned by its path:
+- **Hostile skills**: a local directory of your own, *outside the checkout* (`${TMPDIR:-/tmp}/red-agent/<case>`; `TMPDIR` is often unset on Linux), scanned by its path:
   a `SKILL.md` with `<script>`, `<img onerror>`, `javascript:` links, a name or description with HTML in it, huge
   front matter, YAML anchors and aliases, a front matter that is not a mapping, no closing `---`, 1 MB of Markdown,
   hundreds of skills, two skills of the same name
@@ -67,17 +67,21 @@ $ npm run demo -- red-<slug>          # demo-videos/<title>.webm
 Watch the video: it must show the bug without the issue's text. 10–30 seconds.
 
 The videos, on a branch of their own, `red-agent`, never on `main`: GitHub's API cannot attach a file to an issue.
+From the checkout; `red-agent` continued if it is on `origin` already, a new orphan branch otherwise (an orphan over an
+existing one would not push):
 
 ```console
-$ git worktree add --orphan -b red-agent "$TMPDIR/red-agent-branch"   # or: git worktree add "$TMPDIR/red-agent-branch" origin/red-agent
-$ cp demo-videos/<title>.webm demo/red-<slug>.demo.ts "$TMPDIR/red-agent-branch/<slug>/"
-$ cd "$TMPDIR/red-agent-branch" && git add -A && git commit -m "Red agent: <slug>" && git push origin red-agent
+$ RED="${TMPDIR:-/tmp}/red-agent-branch"
+$ if git fetch origin red-agent; then git worktree add -B red-agent "$RED" origin/red-agent; else git worktree add --orphan -b red-agent "$RED"; fi
+$ mkdir -p "$RED/<slug>" && cp demo-videos/<title>.webm demo/red-<slug>.demo.ts "$RED/<slug>/"
+$ ffmpeg -i demo-videos/<title>.webm -vf "fps=10,scale=960:-1" "$RED/<slug>/<slug>.gif"   # with ffmpeg: a GIF, inline in the issue
+$ git -C "$RED" add -A && git -C "$RED" commit -m "Red agent: <slug>" && git -C "$RED" push origin red-agent
+$ git worktree remove "$RED"
 ```
 
-With `ffmpeg`, a GIF too, inline in the issue:
-`ffmpeg -i <title>.webm -vf "fps=10,scale=960:-1" <slug>/<slug>.gif`.
-
-Then take `demo/red-<slug>.demo.ts` out of the checkout: `git status` stays clean ([spec/workspace.md](../../../spec/workspace.md)).
+`<title>`: the video's file name, `demo-videos/<title>.webm` ([spec/demo.md](../../../spec/demo.md)). The GIF before the
+commit: the issue links to it. Then take `demo/red-<slug>.demo.ts` out of the checkout: `git status` stays clean
+([spec/workspace.md](../../../spec/workspace.md)).
 
 ## 5. An issue per bug
 
