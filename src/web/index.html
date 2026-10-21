@@ -36,6 +36,13 @@
   #filter[hidden] { display: none; }
   #query { padding: 10px 104px 10px 16px; font: 16px var(--sans); }
   #skills { padding-bottom: 16px; }
+  #start { padding: 24px 40px; color: var(--muted); }
+  #start[hidden] { display: none; }
+  #start p { margin: 0; }
+  #start ul { margin: 12px 0; padding: 0; list-style: none; }
+  #start li { margin: 8px 0; }
+  #start .example { display: inline-block; width: auto; margin-right: 8px; padding: 6px 12px; border-radius: 6px; background: var(--chip); color: var(--text); font: 16px var(--mono); }
+  #start .example:hover { background: #e9eafb; }
   #matches { position: absolute; right: 32px; padding: 2px 12px; border-radius: 999px; background: var(--accent); color: #fff; font: 500 14px var(--sans); white-space: nowrap; pointer-events: none; }
   #matches:empty { display: none; }
   mark { padding: 0 1px; border-radius: 3px; background: #f8e3a3; color: var(--text); }
@@ -48,6 +55,9 @@
   .placeholder { margin-top: 72px; color: var(--muted); font-size: 18px; }
   article h2 { margin: 0 0 8px; font: 600 22px var(--mono); }
   article a { color: var(--accent); word-break: break-all; font-size: 14px; }
+  .link { display: flex; align-items: baseline; gap: 12px; margin: 0; }
+  .copy { flex: none; padding: 2px 10px; border-radius: 6px; background: var(--chip); color: var(--text); font: 13px var(--sans); }
+  .copy:hover { background: #e2e2df; }
   .copies, .updated { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
   pre { margin: 24px 0 0; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font: 14px/1.55 var(--mono); white-space: pre-wrap; word-wrap: break-word; }
   main[hidden], #organization[hidden] { display: none; }
@@ -95,6 +105,14 @@
       <span id="matches"></span>
     </div>
     <div id="skills"></div>
+    <div id="start">
+      <p>Scan a repository to see its skills. Try:</p>
+      <ul>
+        <li><button type="button" class="example" data-repo="JetBrains/kotlin">JetBrains/kotlin</button>a repository</li>
+        <li><button type="button" class="example" data-repo="github.com/JetBrains">github.com/JetBrains</button>an organization</li>
+      </ul>
+      <p>or the path to a local directory.</p>
+    </div>
   </nav>
   <article id="skill"><p class="placeholder">Select a skill to read its SKILL.md.</p></article>
 </main>
@@ -121,6 +139,8 @@
   // The scanned skills, and the one on the right, if any.
   let scanned = [];
   let selected = null;
+  // The latest scan's number: an earlier one still answering, as after Back, changes nothing.
+  let scans = 0;
   const placeholder = () => $('skill').replaceChildren(element('p', { className: 'placeholder', textContent: 'Select a skill to read its SKILL.md.' }));
 
   // `github.com/<org>`, without a repository: as parseGitHubOrganization in src/core/organization.ts.
@@ -128,38 +148,86 @@
   // The repositories with skills shown before `+K more`.
   const FEW = 3;
 
-  $('scan').addEventListener('submit', async (event) => {
+  $('scan').addEventListener('submit', (event) => {
     event.preventDefault();
-    const repo = $('repo').value.trim();
+    scanInput($('repo').value.trim(), { push: true });
+  });
+
+  // An example, clicked: typed in the field and scanned.
+  for (const example of document.querySelectorAll('.example')) {
+    example.addEventListener('click', () => {
+      $('repo').value = example.dataset.repo;
+      $('scan').requestSubmit();
+    });
+  }
+
+  // What is scanned, and the selected skill, in the page's URL: `?repo=<input>&skill=<name>`, to
+  // reload or share; Back and Forward go from one scan to another.
+  const address = (repo, skill) => {
+    const value = (text) => encodeURIComponent(text).replace(/%2F/gi, '/').replace(/%3A/gi, ':');
+    return `?repo=${value(repo)}${skill ? `&skill=${value(skill)}` : ''}`;
+  };
+  const scannedInput = () => new URLSearchParams(location.search).get('repo');
+
+  function restore() {
+    const params = new URLSearchParams(location.search);
+    const repo = params.get('repo')?.trim();
+    $('repo').value = repo ?? '';
+    if (repo) return scanInput(repo, { skill: params.get('skill') });
+    // The empty page: a scan still answering changes nothing.
+    scans++;
+    $('submit').disabled = false;
+    $('submit').textContent = 'Scan';
+    showStart();
+  }
+  window.addEventListener('popstate', restore);
+  if (scannedInput()) restore();
+
+  /**
+   * Scans the input; `push`, typed: a new entry in the history for another input, the skill dropped for
+   * the same one. Else from the URL: `skill`, selected once scanned, dropped if the repository has none.
+   */
+  async function scanInput(repo, { push = false, skill = null } = {}) {
     if (!repo) return;
+    const scan = ++scans;
+    const stale = () => scan !== scans;
+    if (push) history[scannedInput() !== repo ? 'pushState' : 'replaceState'](null, '', address(repo));
     $('submit').disabled = true;
     $('submit').textContent = 'Scanning…';
     $('messages').replaceChildren();
     try {
-      if (ORGANIZATION.test(repo)) return await scanOrganization(repo);
+      if (ORGANIZATION.test(repo)) return await scanOrganization(repo, stale);
       const response = await fetch(`/api/scan?repo=${encodeURIComponent(repo)}`);
       const result = await response.json();
+      if (stale()) return;
       if (!response.ok) return showError(result.error);
       show(result);
+      // The skill in the URL, if the repository still has it; the first of that name.
+      const index = scanned.findIndex((other) => other.name === skill);
+      if (index >= 0) select($('skills').children[index], scanned[index]);
+      else if (skill) history.replaceState(null, '', address(repo));
     } catch (error) {
-      showError(`Cannot reach the Skill Atlas server: ${error.message}`);
+      if (!stale()) showError(`Cannot reach the Skill Atlas server: ${error.message}`);
     } finally {
+      if (stale()) return;
       $('submit').disabled = false;
       $('submit').textContent = 'Scan';
     }
-  });
+  }
 
   $('query').addEventListener('input', () => list());
 
   /** The server answers one JSON object a line as the scan goes; see src/web.ts. */
-  async function scanOrganization(input) {
+  async function scanOrganization(input, stale) {
     showOrganization(input.replace(/^(?:https?:\/\/)?(?:www\.)?/i, '').replace(/\/$/, ''));
     const response = await fetch(`/api/organization?org=${encodeURIComponent(input)}`);
+    if (stale()) return response.body?.cancel();
     if (!response.ok) return showError((await response.json()).error);
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let rest = '';
     for (;;) {
       const { value, done } = await reader.read();
+      if (stale()) return reader.cancel(); // the server stops asking GitHub
       if (done) break;
       const lines = (rest + value).split('\n');
       rest = lines.pop();
@@ -175,6 +243,7 @@
   }
 
   function showOrganization(name) {
+    $('start').hidden = true;
     $('repository').hidden = true;
     $('updated').hidden = true;
     scanned = [];
@@ -224,7 +293,14 @@
   }
 
   function showError(message) {
+    showStart();
+    $('messages').replaceChildren(element('div', { className: 'error', textContent: message }));
+  }
+
+  // Nothing scanned: no skills, and the examples.
+  function showStart() {
     showSkills();
+    $('start').hidden = false;
     $('repository').hidden = true;
     $('updated').hidden = true;
     scanned = [];
@@ -233,7 +309,7 @@
     $('query').value = '';
     $('skills').replaceChildren();
     placeholder();
-    $('messages').replaceChildren(element('div', { className: 'error', textContent: message }));
+    $('messages').replaceChildren();
   }
 
   function showSkills() {
@@ -243,6 +319,7 @@
 
   function show({ repository, skills, warnings }) {
     showSkills();
+    $('start').hidden = true;
     $('id').textContent = repository.id;
     $('count').textContent = `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}`;
     $('repository').hidden = false;
@@ -280,13 +357,34 @@
 
   function select(item, skill) {
     selected = skill;
+    history.replaceState(null, '', address(scannedInput(), skill.name));
     for (const other of $('skills').children) other.setAttribute('aria-current', String(other === item));
     $('skill').replaceChildren(
       element('h2', { textContent: skill.name }),
-      element('a', { href: skill.link, textContent: skill.link, target: '_blank', rel: 'noopener' }),
+      element('p', { className: 'link' },
+        element('a', { href: skill.link, textContent: skill.link, target: '_blank', rel: 'noopener' }),
+        copyButton(skill.link)),
       ...(skill.copies.length ? [element('p', { className: 'copies', textContent: `also in ${skill.copies.join(', ')}` })] : []),
       ...(skill.updated ? [element('p', { className: 'updated', textContent: `updated ${day(skill.updated)}` })] : []),
       element('pre', { textContent: skill.content }));
+  }
+
+  // `Copy link`: the skill's link on the clipboard; `Copied` for a moment, or `Cannot copy`.
+  function copyButton(link) {
+    const button = element('button', { type: 'button', className: 'copy', textContent: 'Copy link', title: 'Copy the link to this SKILL.md' });
+    button.setAttribute('aria-live', 'polite');
+    let shown;
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(link);
+        button.textContent = 'Copied';
+      } catch {
+        button.textContent = 'Cannot copy';
+      }
+      clearTimeout(shown);
+      shown = setTimeout(() => (button.textContent = 'Copy link'), 2000);
+    });
+    return button;
   }
 </script>
 </body>

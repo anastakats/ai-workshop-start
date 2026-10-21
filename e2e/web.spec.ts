@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 
 const field = (page: Page) => page.getByRole('textbox', { name: 'Repository' });
 const scanButton = (page: Page) => page.getByRole('button', { name: 'Scan' });
-const skills = (page: Page) => page.getByRole('navigation', { name: 'Skills' }).getByRole('button');
+const skills = (page: Page) => page.getByRole('navigation', { name: 'Skills' }).locator('#skills').getByRole('button');
 
 test('the empty page: the title, the field, Scan, and the placeholder', async ({ page, step }) => {
   await step('the empty page', async () => {
@@ -340,5 +340,222 @@ test('3 or fewer with skills: all of them, no +K more; none: No repositories wit
     await scanButton(page).click();
     await expect(card.locator('.among')).toHaveText('No repositories with skills');
     await expect(card.locator('#org-result button')).toHaveCount(0);
+  });
+});
+
+const examples = (page: Page) => page.locator('#start');
+
+test('before a scan, the examples: a click scans one; hidden once scanned, back after an error', async ({ page, step }) => {
+  await step('the examples', async () => {
+    await expect(examples(page)).toBeVisible();
+    await expect(examples(page).locator('p').first()).toHaveText('Scan a repository to see its skills. Try:');
+    await expect(examples(page).getByRole('button')).toHaveText(['JetBrains/kotlin', 'github.com/JetBrains']);
+    await expect(examples(page).locator('li')).toHaveText(['JetBrains/kotlina repository', 'github.com/JetBrainsan organization']);
+    await expect(examples(page).locator('p').last()).toHaveText('or the path to a local directory.');
+  });
+
+  await step('JetBrains/kotlin clicked: typed and scanned', async () => {
+    const asked: string[] = [];
+    await page.route('**/api/scan?*', (route) => {
+      asked.push(new URL(route.request().url()).searchParams.get('repo')!);
+      return route.fulfill({ json: { repository: { id: 'JetBrains/kotlin' }, skills: [], warnings: [] } });
+    });
+    await examples(page).getByRole('button', { name: 'JetBrains/kotlin' }).click();
+    await expect(field(page)).toHaveValue('JetBrains/kotlin');
+    await expect(page.locator('#repository')).toHaveText('JetBrains/kotlin0 skills');
+    expect(asked).toEqual(['JetBrains/kotlin']);
+    await expect(examples(page)).toBeHidden();
+    await page.unroute('**/api/scan?*');
+  });
+
+  await step('an error: the examples again', async () => {
+    await field(page).fill(join(FIXTURE, 'no-such-directory'));
+    await scanButton(page).click();
+    await expect(page.locator('.error')).toBeVisible();
+    await expect(examples(page)).toBeVisible();
+  });
+
+  await step('github.com/JetBrains clicked: the organization scanned', async () => {
+    await examples(page).getByRole('button', { name: 'github.com/JetBrains' }).click();
+    await expect(field(page)).toHaveValue('github.com/JetBrains');
+    await expect(organization(page).locator('.among')).toHaveText('4 with skills, among them');
+    await expect(examples(page)).toBeHidden();
+  });
+});
+
+const article = (page: Page) => page.locator('article');
+const query = (page: Page) => Object.fromEntries(new URL(page.url()).searchParams);
+
+test('the URL: what is scanned and the selected skill; reloaded, the same; Back and Forward, from one scan to another; only the latest scan shown', async ({ page, step }) => {
+  await step('scanned: ?repo=', async () => {
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+    expect(query(page)).toEqual({ repo: FIXTURE });
+    // Slashes as they are: the link reads as what was typed.
+    expect(page.url()).toContain(`?repo=${FIXTURE}`);
+  });
+
+  await step('commits selected: &skill=commits', async () => {
+    await skills(page).filter({ hasText: 'commits' }).click();
+    expect(query(page)).toEqual({ repo: FIXTURE, skill: 'commits' });
+  });
+
+  await step('reloaded: the same scan and skill', async () => {
+    await page.reload();
+    await expect(field(page)).toHaveValue(FIXTURE);
+    await expect(skills(page).filter({ hasText: 'commits' })).toHaveAttribute('aria-current', 'true');
+    await expect(article(page).getByRole('heading')).toHaveText('commits');
+  });
+
+  await step('another repository scanned: no skill', async () => {
+    await field(page).fill('JetBrains/example');
+    await scanButton(page).click();
+    await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
+    expect(query(page)).toEqual({ repo: 'JetBrains/example' });
+    expect(page.url()).toMatch(/\/\?repo=JetBrains\/example$/);
+  });
+
+  await step('Back: the scan before, its skill selected', async () => {
+    await page.goBack();
+    await expect(field(page)).toHaveValue(FIXTURE);
+    await expect(page.locator('#repository')).toHaveText('fixture6 skills');
+    await expect(article(page).getByRole('heading')).toHaveText('commits');
+  });
+
+  await step('Back again: the empty page', async () => {
+    await page.goBack();
+    await expect(field(page)).toHaveValue('');
+    await expect(skills(page)).toHaveCount(0);
+    await expect(page.locator('#repository')).toBeHidden();
+    await expect(examples(page)).toBeVisible();
+  });
+
+  await step('Forward: the scan again', async () => {
+    await page.goForward();
+    await expect(field(page)).toHaveValue(FIXTURE);
+    await expect(article(page).getByRole('heading')).toHaveText('commits');
+  });
+
+  await step('Back to the empty page while a scan answers: the empty page stays', async () => {
+    let answer!: () => void;
+    const answered = new Promise<void>((resolve) => (answer = resolve));
+    await page.route('**/api/scan?*', async (route) => {
+      await answered;
+      await route.continue();
+    });
+    await page.goBack();
+    await expect(field(page)).toHaveValue('');
+    await page.goForward();
+    await expect(page.getByRole('button', { name: 'Scanning…' })).toBeDisabled();
+    await page.goBack();
+    await expect(scanButton(page)).toBeEnabled();
+    answer();
+    await page.waitForResponse('**/api/scan?*');
+    await expect(skills(page)).toHaveCount(0);
+    await expect(examples(page)).toBeVisible();
+    await page.unroute('**/api/scan?*');
+    await page.goForward();
+    await expect(article(page).getByRole('heading')).toHaveText('commits');
+  });
+
+  await step('the same repository scanned again: no new entry, the skill dropped', async () => {
+    await scanButton(page).click();
+    await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+    expect(query(page)).toEqual({ repo: FIXTURE });
+    await page.goBack();
+    await expect(field(page)).toHaveValue('');
+  });
+});
+
+test('a shared link: the repository scanned and its skill selected; a skill it does not have, none; an organization', async ({ page, step }) => {
+  await step('?repo=JetBrains/example&skill=commits opened', async () => {
+    await page.goto('/?repo=JetBrains/example&skill=commits');
+    await expect(field(page)).toHaveValue('JetBrains/example');
+    await expect(skills(page).filter({ hasText: 'commits' })).toHaveAttribute('aria-current', 'true');
+    await expect(article(page).getByRole('heading')).toHaveText('commits');
+  });
+
+  await step('a skill it does not have: none selected, dropped from the URL', async () => {
+    await page.goto('/?repo=JetBrains/example&skill=no-such-skill');
+    await expect(skills(page)).toHaveCount(1);
+    await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
+    expect(query(page)).toEqual({ repo: 'JetBrains/example' });
+  });
+
+  await step('?repo=github.com/JetBrains: the organization', async () => {
+    await page.goto('/?repo=github.com/JetBrains');
+    await expect(field(page)).toHaveValue('github.com/JetBrains');
+    await expect(organization(page).locator('.among')).toHaveText('4 with skills, among them');
+  });
+
+  await step('a repository from it: a new entry, Back to the organization', async () => {
+    await organization(page).getByRole('button', { name: '+1 more' }).click();
+    await organization(page).getByRole('button', { name: /^example/ }).click();
+    await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
+    expect(query(page)).toEqual({ repo: 'JetBrains/example' });
+    await page.goBack();
+    await expect(field(page)).toHaveValue('github.com/JetBrains');
+    await expect(organization(page).locator('.among')).toHaveText('4 with skills, among them');
+  });
+
+  await step('Back while a scan answers: the later scan shown, not the earlier', async () => {
+    let answer!: () => void;
+    const answered = new Promise<void>((resolve) => (answer = resolve));
+    let asked = 0;
+    await page.route('**/api/scan?*', async (route) => {
+      asked++;
+      await answered;
+      await route.continue();
+    });
+    await organization(page).getByRole('button', { name: '+1 more' }).click();
+    await organization(page).getByRole('button', { name: /^example/ }).click();
+    await expect.poll(() => asked).toBe(1);
+    await page.goBack();
+    await expect(organization(page).locator('.among')).toHaveText('4 with skills, among them');
+    answer();
+    await page.waitForResponse('**/api/scan?*');
+    await expect(scanButton(page)).toBeEnabled();
+    await expect(organization(page)).toBeVisible();
+    await expect(field(page)).toHaveValue('github.com/JetBrains');
+    await expect(page.locator('#repository')).toBeHidden();
+  });
+});
+
+test("Copy link: the selected skill's link on the clipboard, Copied for a moment; Cannot copy without the clipboard", async ({ page, context, step }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // The moment Copied stays, run by the test: the same screenshots on every run.
+  await page.clock.install();
+  await page.goto('/');
+  const copy = article(page).getByRole('button', { name: /Copy link|Copied|Cannot copy/ });
+  const link = `https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`;
+
+  await step('commits selected: Copy link, next to its link', async () => {
+    await field(page).fill('JetBrains/example');
+    await scanButton(page).click();
+    await skills(page).filter({ hasText: 'commits' }).click();
+    await expect(copy).toHaveText('Copy link');
+    await expect(copy).toHaveAttribute('title', 'Copy the link to this SKILL.md');
+    await expect(article(page).locator('.link').getByRole('link')).toHaveAttribute('href', link);
+  });
+
+  await step('clicked: Copied, the link on the clipboard', async () => {
+    await copy.click();
+    await expect(copy).toHaveText('Copied');
+    // As strings: the e2e tests are typed without the DOM.
+    expect(await page.evaluate('navigator.clipboard.readText()')).toBe(link);
+  });
+
+  await step('a moment later: Copy link again', async () => {
+    await page.clock.runFor(2000);
+    await expect(copy).toHaveText('Copy link');
+  });
+
+  await step('the clipboard refused: Cannot copy', async () => {
+    await page.evaluate("navigator.clipboard.writeText = () => Promise.reject(new Error('denied'))");
+    await copy.click();
+    await expect(copy).toHaveText('Cannot copy');
+    await page.clock.runFor(2000);
+    await expect(copy).toHaveText('Copy link');
   });
 });
