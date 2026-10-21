@@ -32,7 +32,7 @@ The base scenarios end to end, in Chromium: `npm run e2e` (e2e/), with GitHub an
 ## Preview
 The selected skill's `SKILL.md`, as GitHub would show it: its front matter, then its Markdown, rendered.
 - **Front matter**: a small table, a row a key, in its order (`name`, `description` and the others), the value as text: a list joined with `, `, a mapping as YAML; none, no table
-- Front matter YAML cannot read as a mapping: its text, *as it is*, instead of the table
+- Front matter YAML cannot read as a mapping: its text, *as it is*, instead of the table; no warning, it is the skill's own text
 - **Markdown**: the body after the front matter, GitHub's flavor ([marked](https://marked.js.org)): headings, lists, code, tables, quotes, links, images
 - Raw HTML in it: shown as *text*, not HTML
 - Links: in a new tab, but `#section`; relative links and images next to the `SKILL.md`: on GitHub at the scanned commit, an image `raw/`

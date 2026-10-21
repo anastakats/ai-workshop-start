@@ -47,10 +47,8 @@ test('a local directory, scanned with Enter: the repository, its skills sorted b
     await expect(skills(page).filter({ hasText: 'commits' }).locator('.description')).toHaveText(
       'Write commit messages the way this repository does. Use for every commit.',
     );
-    await expect(page.locator('.warning')).toHaveText([
-      /^warning: \.agents\/skills\/plain-notes\/SKILL\.md: no front matter/,
-      /^warning: \.agents\/skills\/release-checklist\/SKILL\.md: malformed front matter/,
-    ]);
+    // No front matter, or a malformed one: no warning, the preview shows the text.
+    await expect(page.locator('.warning')).toHaveCount(0);
     await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
   });
 });

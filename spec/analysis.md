@@ -12,7 +12,7 @@ Skill: id = `repo:path`, name, description, commit, updated
 - With `GITHUB_TOKEN`, private repositories it sees too: `SKILL.md` is read with the token
 - The name: front matter, else the directory
 - The link pins the *scanned commit*
-- Malformed front matter → a *warning*, the scan goes on
+- Malformed front matter, or none (no `---`, not closed, not a mapping): the skill's own text, *no warning*; the directory name, no description, the scan goes on; the [preview](web.md#preview) shows its text as it is
 - A listed `SKILL.md` that cannot be read → a *warning* that says why, the scan goes on:
   - GitHub code search lists a file not in the scanned commit → its index lags behind the default branch, the file was probably moved or deleted
   - In the tree, but GitHub answers 404 for it → the commit and the 404

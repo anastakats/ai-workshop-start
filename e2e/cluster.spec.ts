@@ -148,8 +148,8 @@ test('the model fails: its message, the skills as they were, Cluster again', asy
     await expect(items(page)).toHaveCount(6);
     await expect(cluster(page)).toHaveText('Cluster');
     await expect(cluster(page)).toBeEnabled();
-    // The scan's warnings stay.
-    await expect(page.locator('#messages .warning')).toHaveCount(2);
+    // The scan has no warnings: ./fixture's malformed front matter is not one.
+    await expect(page.locator('#messages .warning')).toHaveCount(0);
   });
 
   await step('clicked again: one error, not two', async () => {
