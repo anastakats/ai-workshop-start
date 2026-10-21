@@ -133,7 +133,7 @@ test('rate limit → a message that asks for GITHUB_TOKEN', async () => {
     },
   });
   await assert.rejects(openGitHub('https://github.com/JetBrains/MPS', { fetch: limited }), {
-    message: 'GitHub rate limit reached; set GITHUB_TOKEN',
+    message: 'GitHub rate limit reached; set GITHUB_TOKEN or log in with gh auth login',
   });
 });
 
@@ -302,7 +302,7 @@ test('a last update GitHub cannot tell → the skill without it, one warning for
   assert.deepEqual(result.skills.map((skill) => `${skill.name} ${skill.updated}`), ['alpha ', 'beta ', 'gamma ']);
   assert.deepEqual(result.warnings, [
     'the last update of 1 skill is unknown: not a date: not a date',
-    'the last update of 2 skills is unknown: GitHub rate limit reached; set GITHUB_TOKEN',
+    'the last update of 2 skills is unknown: GitHub rate limit reached; set GITHUB_TOKEN or log in with gh auth login',
   ]);
   // Nothing known: no date at all.
   const printed = await scanDated(github);
@@ -315,7 +315,7 @@ test('a last update GitHub cannot tell → the skill without it, one warning for
   assert.match(some.stdout, /^JetBrains\/dated · 3 skills · last updated 2026-01-01\n/);
   assert.deepEqual(some.stderr.split('\n'), [
     'warning: the last update of 1 skill is unknown: GitHub lists no commit that changed .agents/skills/beta',
-    'warning: the last update of 1 skill is unknown: GitHub rate limit reached; set GITHUB_TOKEN',
+    'warning: the last update of 1 skill is unknown: GitHub rate limit reached; set GITHUB_TOKEN or log in with gh auth login',
   ]);
 });
 

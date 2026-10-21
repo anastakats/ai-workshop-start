@@ -192,7 +192,7 @@ test('an organization: a failure during the scan → a last line { error }', asy
     async organization(_input, { progress }) {
       progress?.({ organization: { id: 'Big', url: 'https://github.com/Big', repositories: 2 } });
       progress?.({ scanned: 1 });
-      throw new AtlasError('GitHub rate limit reached; set GITHUB_TOKEN');
+      throw new AtlasError('GitHub rate limit reached; set GITHUB_TOKEN or log in with gh auth login');
     },
   });
   const url = await listen(failing, 0);
@@ -202,7 +202,7 @@ test('an organization: a failure during the scan → a last line { error }', asy
   assert.deepEqual((await response.text()).split('\n').filter(Boolean).map((line) => JSON.parse(line)), [
     { organization: { id: 'Big', url: 'https://github.com/Big', repositories: 2 } },
     { scanned: 1 },
-    { error: 'GitHub rate limit reached; set GITHUB_TOKEN' },
+    { error: 'GitHub rate limit reached; set GITHUB_TOKEN or log in with gh auth login' },
   ]);
 });
 

@@ -25,7 +25,7 @@ Skill: id = `repo:path`, name, description, commit, updated
 - In UTC, ISO 8601: `updated`, empty if unknown; shown as the day, `2026-10-12`
 - The repository: *last updated*, the latest of its skills', on the command line; the web view shows each skill's, not the repository's
 - A date that cannot be had (the rate limit, an error) → the skill without it and a *warning*, one for each reason with how many skills, the scan goes on:
-  `the last update of 2 skills is unknown: GitHub rate limit reached; set GITHUB_TOKEN`
+  `the last update of 2 skills is unknown: GitHub rate limit reached; set GITHUB_TOKEN or log in with gh auth login`
 - Copies: not dated, as they are not read
 ## Where skills live
 As the [Agent Skills format](https://agentskills.io/specification) defines: a skill is a *directory* with a `SKILL.md`.
