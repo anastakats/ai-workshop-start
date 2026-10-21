@@ -5,7 +5,7 @@ import { parseSkill } from './parse.ts';
 /** A repository to scan: its files, and how to read them. */
 export type Source = {
   repository: Repository;
-  /** Every file path, relative to the repository root. */
+  /** Every file path, relative to the repository root; or at least every one that can be a skill. */
   paths: string[];
   /** What listing the files had to leave out. */
   warnings: string[];

@@ -2,7 +2,7 @@
 // ./fixture and for a small GitHub repository answered in tests/helpers.ts.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -123,6 +123,55 @@ test('unreachable repository → a clear message, exit code 1', async () => {
   const offline = await atlas(['scan', 'https://github.com/JetBrains/not-answered']);
   assert.equal(offline.code, 1);
   assert.match(offline.stderr, /^Cannot reach GitHub: not recorded: https:\/\/api\.github\.com\/repos\/JetBrains\/not-answered$/);
+});
+
+test('a local directory: only its skill roots are read; a folder there that cannot be read → a warning, the scan goes on', async (t) => {
+  const cwd = mkdtempSync(join(tmpdir(), 'skill-atlas-'));
+  const locked: string[] = [];
+  const lock = (path: string) => (chmodSync(join(cwd, path), 0o000), locked.push(path));
+  // Unlocked the other way round: inside a folder that cannot be read, nothing can be unlocked.
+  t.after(() => {
+    for (const path of locked.reverse()) chmodSync(join(cwd, path), 0o755);
+    rmSync(cwd, { recursive: true, force: true });
+  });
+  const skill = (path: string) => {
+    mkdirSync(join(cwd, path), { recursive: true });
+    writeFileSync(join(cwd, path, 'SKILL.md'), `---\nname: ${path.split('/').pop()}\ndescription: On disk.\n---\n`);
+  };
+  skill('.claude/skills/deploy');
+  skill('.agents/skills/secret');
+  skill('.github/skills/shared');
+  skill('docs/skills/elsewhere');
+  // A database volume, owned by a container's user: it can never hold a skill, so it is not read.
+  mkdirSync(join(cwd, 'pgdata/base'), { recursive: true });
+  lock('pgdata');
+  // A skill root followed through a symbolic link would not be the repository's own.
+  symlinkSync(join(cwd, 'docs/skills'), join(cwd, '.claude/skills/linked'));
+
+  const result = await scan(await openDirectory(cwd));
+  assert.deepEqual(result.skills.map((s) => s.name), ['deploy', 'secret', 'shared']);
+  assert.deepEqual(result.warnings, []);
+
+  // In a skill root: the folder, and why; the other skills all the same.
+  lock('.agents/skills/secret');
+  lock('.github/skills');
+  const partly = await scan(await openDirectory(cwd));
+  assert.deepEqual(partly.skills.map((s) => s.name), ['deploy']);
+  assert.deepEqual(partly.warnings, [
+    `.agents/skills/secret: found in the directory, but cannot be read: EACCES: permission denied, scandir '${join(cwd, '.agents/skills/secret')}'; skipped`,
+    `.github/skills: found in the directory, but cannot be read: EACCES: permission denied, scandir '${join(cwd, '.github/skills')}'; skipped`,
+  ]);
+  const scanned = spawnSync(process.execPath, [CLI, 'scan', cwd], { encoding: 'utf8' });
+  assert.equal(scanned.status, 0, scanned.stderr);
+  assert.match(scanned.stdout, /· 1 skill · /);
+  assert.match(scanned.stderr, /^warning: \.agents\/skills\/secret: found in the directory, but cannot be read: EACCES/);
+
+  // Only the directory itself that cannot be read → the error.
+  lock('.');
+  await assert.rejects(openDirectory(cwd), { message: `Not a GitHub URL or a readable directory: ${cwd}` });
+  const unreadable = spawnSync(process.execPath, [CLI, 'scan', cwd], { encoding: 'utf8' });
+  assert.equal(unreadable.status, 1);
+  assert.equal(unreadable.stderr, `Not a GitHub URL or a readable directory: ${cwd}\n`);
 });
 
 test('rate limit → a message that asks for GITHUB_TOKEN', async () => {

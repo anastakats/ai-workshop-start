@@ -1,13 +1,12 @@
 import { execFile } from 'node:child_process';
+import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { AtlasError } from './core/errors.ts';
+import { SKILL_ROOTS } from './core/find.ts';
 import { openGitHub, parseGitHubUrl, type GitHubOptions } from './core/github.ts';
 import type { Missing, Source } from './core/scan.ts';
-
-/** Never part of a repository's own files. */
-const SKIPPED = new Set(['.git', 'node_modules']);
 
 /** What the user typed: a GitHub repository, or a local directory; an existing directory wins. */
 export async function openInput(input: string, github: GitHubOptions): Promise<Source> {
@@ -19,16 +18,17 @@ export async function openInput(input: string, github: GitHubOptions): Promise<S
 export async function openDirectory(input: string): Promise<Source> {
   const root = resolve(input);
   const name = basename(root);
-  let paths: string[];
+  let top: Dirent[];
   try {
-    paths = await walk(root, '');
+    top = await readdir(root, { withFileTypes: true });
   } catch {
     throw new AtlasError(`Not a GitHub URL or a readable directory: ${input}`);
   }
+  const warnings: string[] = [];
   return {
     repository: { id: name, organization: 'local', name, url: pathToFileURL(root).href, commit: '' },
-    paths,
-    warnings: [],
+    paths: await skillFiles(root, top, warnings),
+    warnings,
     read: (path) =>
       readFile(join(root, path)).then(
         (bytes) => new Uint8Array(bytes),
@@ -55,13 +55,29 @@ async function lastChange(root: string, directory: string): Promise<string | Mis
   );
 }
 
-/** Every regular file under the directory, as a path relative to the root. */
-async function walk(root: string, directory: string, paths: string[] = []): Promise<string[]> {
-  // One list for the whole walk: a large repository has more files than a spread can pass.
-  for (const entry of await readdir(join(root, directory), { withFileTypes: true })) {
-    const path = directory ? `${directory}/${entry.name}` : entry.name;
-    if (entry.isDirectory() && !SKIPPED.has(entry.name)) await walk(root, path, paths);
-    else if (entry.isFile()) paths.push(path);
+/**
+ * The SKILL.md of each folder in a skill root, a regular file: no other folder can hold a skill,
+ * so no other is read. One level at a time, folders only: a symbolic link is not followed. A
+ * folder that cannot be read, a warning; the others are listed all the same.
+ */
+async function skillFiles(root: string, top: Dirent[], warnings: string[]): Promise<string[]> {
+  const list = (directory: string) =>
+    readdir(join(root, directory), { withFileTypes: true }).catch((error: NodeJS.ErrnoException): Dirent[] => {
+      warnings.push(`${directory}: found in the directory, but cannot be read: ${error.message}; skipped`);
+      return [];
+    });
+  const paths: string[] = [];
+  for (const skillRoot of SKILL_ROOTS) {
+    let entries = top;
+    let directory = '';
+    for (const segment of skillRoot.split('/')) {
+      directory = directory ? `${directory}/${segment}` : segment;
+      entries = entries.some((entry) => entry.name === segment && entry.isDirectory()) ? await list(directory) : [];
+    }
+    for (const skill of entries.filter((entry) => entry.isDirectory())) {
+      const files = await list(`${directory}/${skill.name}`);
+      if (files.some((entry) => entry.name === 'SKILL.md' && entry.isFile())) paths.push(`${directory}/${skill.name}/SKILL.md`);
+    }
   }
   return paths;
 }
