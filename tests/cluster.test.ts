@@ -63,6 +63,11 @@ test('the answer: out of range ignored, a skill in two groups in the first, in n
   assert.deepEqual(titles(groups), [['Other', ['d', 'e']], ['Build', ['a']], ['Docs', ['c']], ['Tests', ['b']]]);
 });
 
+test('the answer: a skill twice in the same group, once', () => {
+  const groups = parseGroups(answer(['Tests', [1, 1, 2, 2]], ['Build', [3, 4, 5, 3]]), five);
+  assert.deepEqual(titles(groups), [['Build', ['c', 'd', 'e']], ['Tests', ['a', 'b']]]);
+});
+
 test('the answer: the most skills first, then by title; in a group, the skills in their order; no title, Group N', () => {
   const groups = parseGroups(JSON.stringify({ groups: [{ title: 'Zeta', skills: [5, 4] }, { skills: [3] }, { title: ' Alpha ', skills: [2, 1] }] }), five);
   assert.deepEqual(titles(groups), [['Alpha', ['a', 'b']], ['Zeta', ['d', 'e']], ['Group 2', ['c']]]);

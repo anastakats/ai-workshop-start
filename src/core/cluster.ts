@@ -54,8 +54,12 @@ export function parseGroups(answer: string, skills: Clustered[]): Group[] {
     const title = typeof group?.title === 'string' && group.title.trim() ? group.title.trim() : `Group ${groups.length + 1}`;
     const numbers = (Array.isArray(group?.skills) ? group.skills : [])
       .map(Number)
-      .filter((number) => Number.isInteger(number) && number >= 1 && number <= skills.length && !placed.has(number));
-    for (const number of numbers) placed.add(number);
+      .filter((number) => {
+        // Placed as it is read: a number twice, even in the same group, counts once.
+        if (!Number.isInteger(number) || number < 1 || number > skills.length || placed.has(number)) return false;
+        placed.add(number);
+        return true;
+      });
     groups.push({ title, numbers });
   }
   const rest = skills.map((_skill, index) => index + 1).filter((number) => !placed.has(number));
