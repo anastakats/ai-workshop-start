@@ -125,7 +125,10 @@ test('unreachable repository → a clear message, exit code 1', async () => {
   assert.match(offline.stderr, /^Cannot reach GitHub: not recorded: https:\/\/api\.github\.com\/repos\/JetBrains\/not-answered$/);
 });
 
-test('a local directory: only its skill roots are read; a folder there that cannot be read → a warning, the scan goes on', async (t) => {
+// As root, every folder can be read: a chmod cannot lock one.
+const asRoot = process.getuid?.() === 0;
+
+test('a local directory: only its skill roots are read; a folder there that cannot be read → a warning, the scan goes on', { skip: asRoot && 'root reads every folder' }, async (t) => {
   const cwd = mkdtempSync(join(tmpdir(), 'skill-atlas-'));
   const locked: string[] = [];
   const lock = (path: string) => (chmodSync(join(cwd, path), 0o000), locked.push(path));
@@ -145,8 +148,8 @@ test('a local directory: only its skill roots are read; a folder there that cann
   // A database volume, owned by a container's user: it can never hold a skill, so it is not read.
   mkdirSync(join(cwd, 'pgdata/base'), { recursive: true });
   lock('pgdata');
-  // A skill root followed through a symbolic link would not be the repository's own.
-  symlinkSync(join(cwd, 'docs/skills'), join(cwd, '.claude/skills/linked'));
+  // A skill folder followed through a symbolic link would not be the repository's own.
+  symlinkSync(join(cwd, 'docs/skills/elsewhere'), join(cwd, '.claude/skills/linked'));
 
   const result = await scan(await openDirectory(cwd));
   assert.deepEqual(result.skills.map((s) => s.name), ['deploy', 'secret', 'shared']);
