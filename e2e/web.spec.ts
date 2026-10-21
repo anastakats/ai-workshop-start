@@ -7,6 +7,8 @@ import { EXAMPLE_COMMIT, FIXTURE } from '../tests/helpers.ts';
 import { expect, test, type Page } from './steps.ts';
 
 const FIXTURE_SKILLS = ['code-style', 'commits', 'no-description', 'no-name', 'plain-notes', 'release-checklist'];
+// When each of them was last updated: FIXTURE_UPDATED, in tests/helpers.ts.
+const FIXTURE_DAYS = ['2026-10-02', '2026-10-14', '2026-07-30', '2026-08-20', '2026-09-01', '2026-09-15'];
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -39,9 +41,10 @@ test('a local directory, scanned with Enter: the repository, its skills sorted b
   await step('scanned with Enter', async () => {
     await field(page).press('Enter');
     await expect(page.locator('#repository')).toHaveText('fixture6 skills');
-    // The most recently updated skill's day: commits, in tests/helpers.ts.
-    await expect(page.locator('#updated')).toHaveText('last updated 2026-10-14');
+    // Each skill's own day, in tests/helpers.ts; none for the repository.
     await expect(page.locator('nav .name')).toHaveText(FIXTURE_SKILLS);
+    await expect(page.locator('nav .updated')).toHaveText(FIXTURE_DAYS.map((day) => `updated ${day}`));
+    await expect(page.locator('header')).not.toContainText('updated');
     await expect(skills(page).filter({ hasText: 'commits' }).locator('.description')).toHaveText(
       'Write commit messages the way this repository does. Use for every commit.',
     );
@@ -90,8 +93,9 @@ test('owner/repo on GitHub: the skill, linked at the scanned commit, with its SK
     await field(page).fill('JetBrains/example');
     await scanButton(page).click();
     await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
-    await expect(page.locator('#updated')).toHaveText('last updated 2026-10-12');
     await expect(page.locator('nav .name')).toHaveText(['commits']);
+    // When the skill was last committed, in UTC, in the list too.
+    await expect(page.locator('nav .updated')).toHaveText(['updated 2026-10-12']);
   });
 
   await step('its skill selected', async () => {
@@ -121,7 +125,7 @@ test("an unreachable repository: the CLI's message, no skills; the next scan wor
     await expect(page.locator('.error')).toHaveText(`Not a GitHub URL or a readable directory: ${missing}`);
     await expect(skills(page)).toHaveCount(0);
     await expect(page.locator('#repository')).toBeHidden();
-    await expect(page.locator('#updated')).toBeHidden();
+    await expect(page.locator('nav .updated')).toHaveCount(0);
     await expect(page.getByText('Select a skill to read its SKILL.md.')).toBeVisible();
   });
 
@@ -150,6 +154,29 @@ test('while it scans, Scan waits as Scanning…', async ({ page, step }) => {
     answer();
     await expect(scanButton(page)).toBeEnabled();
     await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+  });
+});
+
+test("each skill's day under it in the list, not the repository's; unknown, none", async ({ page, step }) => {
+  // commits' date unknown, as when GitHub's rate limit is reached.
+  await page.route('**/api/scan?*', async (route) => {
+    const result = await (await route.fetch()).json();
+    for (const skill of result.skills) if (skill.name === 'commits') skill.updated = '';
+    await route.fulfill({ json: result });
+  });
+  await step('scanned, one date unknown', async () => {
+    await field(page).fill(FIXTURE);
+    await scanButton(page).click();
+    await expect(skills(page)).toHaveCount(FIXTURE_SKILLS.length);
+    await expect(skills(page).filter({ hasText: 'commits' }).locator('.updated')).toHaveCount(0);
+    await expect(skills(page).filter({ hasText: 'code-style' }).locator('.updated')).toHaveText('updated 2026-10-02');
+    await expect(page.locator('header')).not.toContainText('updated');
+  });
+
+  await step('the skill without a date selected', async () => {
+    await skills(page).filter({ hasText: 'commits' }).click();
+    await expect(page.locator('article').getByRole('heading')).toHaveText('commits');
+    await expect(page.locator('article .updated')).toHaveCount(0);
   });
 });
 
@@ -277,7 +304,7 @@ test('while an organization scans: Scanning…, its name and a progress bar, the
     await expect(page.getByRole('button', { name: 'Scanning…' })).toBeDisabled();
     await expect(organization(page).locator('#org-id')).toHaveText('github.com/JetBrains');
     await expect(organization(page).getByRole('progressbar')).toBeVisible();
-    await expect(page.locator('#updated')).toBeHidden();
+    await expect(page.locator('header')).not.toContainText('updated');
   });
 
   await step('the organization scanned', async () => {
@@ -292,8 +319,8 @@ test('while an organization scans: Scanning…, its name and a progress bar, the
     await expect(field(page)).toHaveValue('JetBrains/example');
     await expect(organization(page)).toBeHidden();
     await expect(page.locator('#repository')).toHaveText('JetBrains/example1 skill');
-    await expect(page.locator('#updated')).toHaveText('last updated 2026-10-12');
     await expect(page.locator('nav .name')).toHaveText(['commits']);
+    await expect(page.locator('nav .updated')).toHaveText(['updated 2026-10-12']);
     await expect(page.getByRole('searchbox', { name: 'Filter the skills' })).toBeVisible();
   });
 });
