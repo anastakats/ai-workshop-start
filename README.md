@@ -20,7 +20,8 @@ the selected `SKILL.md` on the right. `github.com/<org>` in the same field scans
 repositories with skills, the most skills first. Before a scan, examples to click; the page's URL keeps the scan
 and the selected skill (`?repo=JetBrains/kotlin&skill=…`), to reload or share; **Copy link** copies a skill's link.
 
-Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests; `npm run e2e`, the
+Set `GITHUB_TOKEN`, or log in with `gh auth login`, for a higher GitHub rate limit: scanning
+`github.com/JetBrains` needs it. `npm test` runs the tests; `npm run e2e`, the
 web view in a browser (once: `npx playwright install chromium`; or `CHROMIUM_PATH=<chromium>`).
 `npm run demo` records a video of a feature, to show it working in its pull request: [demo/](demo/README.md).
 Each step of the e2e tests is screenshotted; on a pull request, CI compares the screenshots with its base's and

@@ -75,7 +75,7 @@ test('the rate limit during the scan ends it, with a message that asks for GITHU
     [`${API}/repos/Big/a/git/trees/main?recursive=1`]: skills(1),
     [`${API}/repos/Big/b/git/trees/main?recursive=1`]: { status: 403, body: { message: 'API rate limit exceeded for 192.0.2.1.' } },
   };
-  await assert.rejects(scanOrganization('github.com/Big', { fetch: replay(recording) }), { message: 'GitHub rate limit reached; set GITHUB_TOKEN' });
+  await assert.rejects(scanOrganization('github.com/Big', { fetch: replay(recording) }), { message: 'GitHub rate limit reached; set GITHUB_TOKEN or log in with gh auth login' });
 });
 
 test('stopped: no repository is asked for any more', async () => {

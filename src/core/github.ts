@@ -140,7 +140,7 @@ export function client({ fetch, token }: GitHubOptions) {
     if (response.status === 404) throw new AtlasError(notFound);
     if (response.status === 409 && /empty/i.test(text)) throw new EmptyRepository(`The repository is empty: ${url}`);
     if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) {
-      throw new GitHubUnavailable(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
+      throw new GitHubUnavailable(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN or log in with gh auth login'}`);
     }
     if (response.status === 401) throw new GitHubUnavailable('GitHub rejected the token in GITHUB_TOKEN');
     throw new AtlasError(`GitHub answered ${response.status} for ${url}${text && `: ${text}`}`);

@@ -4,9 +4,10 @@
 import { run } from './commands.ts';
 import { scanOrganization } from './core/organization.ts';
 import { openInput } from './local.ts';
+import { githubToken } from './token.ts';
 import { createWebServer, listen, type WebContext } from './web.ts';
 
-const token = process.env.GITHUB_TOKEN || undefined;
+const token = githubToken();
 const open = (input: string) => openInput(input, { fetch, token });
 const organization: WebContext['organization'] = (input, options) => scanOrganization(input, { fetch, token, ...options });
 

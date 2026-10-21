@@ -11,7 +11,7 @@ The target interface: scan a repository, then the skills on the left and the sel
 - While it scans, the button is `Scanning…`, disabled
 - Errors: the CLI's message, in the page, and no skills; warnings under the header
 ## Server
-- Local only: listens on `127.0.0.1`; `GITHUB_TOKEN` stays on the server
+- Local only: listens on `127.0.0.1`; the token, `GITHUB_TOKEN` or gh's ([the token](cli.md)), stays on the server
 - `GET /` the page, with any query too, `GET /filter.js` its filter; `GET /api/scan?repo=<input>` → `{ repository, skills, warnings }`, each skill with its `link`, `content` and `updated`
 - A clear message → `400 { error }`; *nothing is stored*
 ## Tests
@@ -44,7 +44,7 @@ The base scenarios end to end, in Chromium: `npm run e2e` (e2e/), with GitHub an
 - A repository in the list: a click scans it, as `owner/repo`
 - Every repository, private ones too if `GITHUB_TOKEN` sees them; its skills *counted*, from its tree at the default branch, not read
 - An empty repository: no skills; a repository GitHub cannot list: a *warning*, the scan goes on; the rate limit or no GitHub at all: the message, the scan stops
-- Without `GITHUB_TOKEN`, GitHub's rate limit allows about 60 repositories an hour
+- Without `GITHUB_TOKEN` or `gh auth login` ([the token](cli.md)), GitHub's rate limit allows about 60 repositories an hour
 ### Server
 - `GET /api/organization?org=<input>` → one JSON object a line, as the scan goes: `{ organization }` with its `repositories`, the number, once listed; `{ scanned }` after each repository; then `{ organization, repositories, warnings }`, the repositories with skills
 - A clear message before the first line → `400 { error }`; after it, a last line `{ error }`
